@@ -30,7 +30,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-paper text-ink font-body antialiased">
         <Providers>
           <Navbar />
-          <main className="max-w-5xl mx-auto px-6 py-12">{children}</main>
+          <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-6 sm:py-8 lg:py-10">{children}</main>
         </Providers>
       </body>
     </html>

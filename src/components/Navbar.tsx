@@ -8,7 +8,7 @@ export default function Navbar() {
 
   return (
     <nav className="border-b border-paperDark bg-paper">
-      <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-4 sm:py-5 flex items-center justify-between">
         <Link href="/" className="font-display text-xl">
           Stay Composed
         </Link>
