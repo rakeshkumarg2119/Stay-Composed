@@ -15,14 +15,14 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Others"];
 
 export default function BloodAlertPage() {
   const { data: session, status: authStatus } = useSession();
   const [studentName, setStudentName] = useState("");
   const [bloodType, setBloodType] = useState("");
+  const [otherBloodType, setOtherBloodType] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [department, setDepartment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
 
@@ -38,21 +38,24 @@ export default function BloodAlertPage() {
       alert("Please sign in with your college account to send an alert.");
       return;
     }
+    const resolvedBloodType =
+      bloodType === "Others" ? otherBloodType.trim() || "Rare / Custom Type" : bloodType;
+
     setSubmitting(true);
     setStatus("idle");
     try {
       const api = getApiClient();
       await api.post("/blood-alert", {
         studentName,
-        bloodType,
+        bloodType: resolvedBloodType,
         phoneNumber,
-        department,
+        scope: "campus-wide-all-departments",
         senderEmail: session.user?.email,
       });
       setStatus("success");
       setBloodType("");
+      setOtherBloodType("");
       setPhoneNumber("");
-      setDepartment("");
     } catch {
       setStatus("error");
     } finally {
@@ -226,21 +229,23 @@ export default function BloodAlertPage() {
                     className="w-full border border-paperDark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-lavender disabled:bg-paper disabled:cursor-not-allowed"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="text-xs font-medium text-ink/70 block mb-1.5">
-                  Department
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Computer Applications / Information Science"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  required
-                  disabled={!session}
-                  className="w-full border border-paperDark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-lavender disabled:bg-paper disabled:cursor-not-allowed"
-                />
+                {bloodType === "Others" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-semibold text-brick block mb-1.5">
+                      Specify Rare / Custom Blood Group *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Bombay Blood Group (hh), Rh-null, Kell (K+), Colton, etc."
+                      value={otherBloodType}
+                      onChange={(e) => setOtherBloodType(e.target.value)}
+                      required
+                      disabled={!session}
+                      className="w-full border border-brick/40 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white disabled:bg-paper"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="pt-2">
@@ -293,8 +298,8 @@ export default function BloodAlertPage() {
               <h3 className="font-display text-lg text-ink">Protocol &amp; Dispatch Rules</h3>
               <div className="flex flex-col gap-3 text-xs text-ink/75 leading-relaxed">
                 <div className="p-3 bg-paper rounded-xl border border-paperDark">
-                  <strong className="text-ink block mb-1">1. Direct Department Routing</strong>
-                  Broadcasts avoid campus-wide spam by alerting only staff affiliated with the specified department.
+                  <strong className="text-ink block mb-1">1. Campus-Wide Broadcast</strong>
+                  Broadcasts immediately reach available staff and faculty across all departments on campus to ensure fast emergency response.
                 </div>
                 <div className="p-3 bg-paper rounded-xl border border-paperDark">
                   <strong className="text-ink block mb-1">2. No Trailing Availability Trackers</strong>

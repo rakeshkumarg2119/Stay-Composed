@@ -10,8 +10,8 @@ export interface LostFoundItem {
   imageUrl?: string;
   cloudinaryPublicId?: string;
   // Secret verification features: ONLY for lost complaints, kept secret, never exposed publicly
-  secretFeatures?: string;
-  challengeQuestion?: string; // Prompt/question set for ownership challenge
+  secretFeatures?: string[];
+  challengeQuestions?: string[]; // Prompt/questions set for ownership challenge
   reportedBy: string; // masked display name, e.g. "Campus Member #4821"
   reportedByUserId?: string;
   reportedByEmail?: string;
@@ -31,6 +31,13 @@ export interface BloodAlertRequest {
   department: string;
   senderEmail?: string;
   createdAt: Date | string;
+}
+
+export interface ClaimResult {
+  verified: boolean;
+  matchedFields: number;
+  totalFields: number;
+  message: string;
 }
 
 export interface MaskedUser {

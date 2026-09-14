@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { TrueOwnerItem } from "@/types";
+import { getApiClient } from "@/lib/apiClient";
+import { ClaimResult, TrueOwnerItem } from "@/types";
 import {
   ShieldCheck,
   Search,
@@ -21,6 +22,7 @@ import {
   Tag,
   ArrowRight,
   ImageIcon,
+  X,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -35,6 +37,20 @@ const CATEGORIES = [
   "Other",
 ];
 
+// Keep in sync with backend/app/utils/locations.py -> CAMPUS_LOCATIONS
+const LOCATIONS = [
+  "New Block (NB)",
+  "Physics UG & PG Block",
+  "Chemistry UG & PG Block",
+  "Rahda Thiagarajar Auditorium (RTA)",
+  "Zoology Block (NH)",
+  "Biotechnology Block",
+  "Library Block",
+  "TK Block",
+  "Others",
+];
+const OTHERS_LOCATION = "Others";
+
 export default function TrueOwnerPage() {
   const { data: session } = useSession();
   const [myComplaints, setMyComplaints] = useState<TrueOwnerItem[]>([]);
@@ -44,12 +60,13 @@ export default function TrueOwnerPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"complaints" | "matches" | "my-found">("complaints");
+  const [backendError, setBackendError] = useState(false);
 
   // Form modal state
   const [formType, setFormType] = useState<"lost" | "found" | null>(null);
 
   useEffect(() => {
-    if (session) {
+    if (session?.user?.email) {
       fetchTrueOwnerData();
     } else {
       setLoading(false);
@@ -57,17 +74,18 @@ export default function TrueOwnerPage() {
   }, [session]);
 
   async function fetchTrueOwnerData() {
+    if (!session?.user?.email) return;
     setLoading(true);
+    setBackendError(false);
     try {
-      const res = await fetch("/api/items");
-      if (res.ok) {
-        const data = await res.json();
-        setMyComplaints(data.myComplaints || []);
-        setMyFoundItems(data.myFoundItems || []);
-        setCandidateMatches(data.candidateMatches || []);
-      }
+      const api = getApiClient();
+      const res = await api.get("/items/mine", { params: { email: session.user.email } });
+      setMyComplaints(res.data?.myComplaints || []);
+      setMyFoundItems(res.data?.myFoundItems || []);
+      setCandidateMatches(res.data?.candidateMatches || []);
     } catch (err) {
-      console.error("Failed to load True Owner data:", err);
+      console.error("Failed to load True Owner data from backend:", err);
+      setBackendError(true);
     } finally {
       setLoading(false);
     }
@@ -203,6 +221,25 @@ export default function TrueOwnerPage() {
             </div>
           ) : (
             <>
+              {backendError && (
+                <div className="bg-brick/10 border border-brick/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5 text-xs text-brick leading-relaxed">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Couldn&apos;t reach the FastAPI backend for CLIP matching. Connect your
+                      ngrok URL in Settings, then refresh this page.
+                    </span>
+                  </div>
+                  <Link
+                    href="/settings"
+                    className="shrink-0 inline-flex items-center gap-1.5 bg-brick text-white px-4 py-2 rounded-full text-xs font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    Go to Settings
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              )}
+
               {/* Navigation Tabs */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-paperDark pb-4">
                 <div className="flex gap-2">
@@ -274,6 +311,8 @@ export default function TrueOwnerPage() {
                             key={complaint._id || complaint.id}
                             complaint={complaint}
                             matches={matchesForThis}
+                            claimantEmail={session?.user?.email || ""}
+                            onClaimed={fetchTrueOwnerData}
                           />
                         );
                       })}
@@ -313,6 +352,8 @@ export default function TrueOwnerPage() {
                           candidate={candidate}
                           confidence={confidence}
                           forComplaintId={forComplaintId}
+                          claimantEmail={session?.user?.email || ""}
+                          onClaimed={fetchTrueOwnerData}
                         />
                       ))}
                     </div>
@@ -375,11 +416,16 @@ export default function TrueOwnerPage() {
 function ComplaintCard({
   complaint,
   matches,
+  claimantEmail,
+  onClaimed,
 }: {
   complaint: TrueOwnerItem;
   matches: { candidate: TrueOwnerItem; confidence: number }[];
+  claimantEmail: string;
+  onClaimed: () => void;
 }) {
   const [showSecret, setShowSecret] = useState(false);
+  const [claiming, setClaiming] = useState<TrueOwnerItem | null>(null);
 
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col gap-5">
@@ -441,7 +487,15 @@ function ComplaintCard({
 
         <div className="text-xs text-ink/80 bg-white/80 p-3 rounded-lg border border-purple/10 font-mono">
           {showSecret ? (
-            complaint.secretFeatures || "No secret specified"
+            complaint.secretFeatures && complaint.secretFeatures.length > 0 ? (
+              <ul className="list-disc list-inside space-y-1">
+                {complaint.secretFeatures.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+            ) : (
+              "No secret specified"
+            )
           ) : (
             <span className="text-ink/40 tracking-widest">
               &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull; (Kept Private for Verification)
@@ -499,11 +553,7 @@ function ComplaintCard({
                   </p>
                 </div>
                 <button
-                  onClick={() =>
-                    alert(
-                      `Ownership verification challenge initiated! Founder's prompt: "${candidate.challengeQuestion || 'Verify secret features'}"`
-                    )
-                  }
+                  onClick={() => setClaiming(candidate)}
                   className="bg-purple text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors self-start shadow-xs"
                 >
                   Verify Ownership (Answer Challenge)
@@ -513,6 +563,19 @@ function ComplaintCard({
           </div>
         )}
       </div>
+
+      {claiming && (
+        <ClaimModal
+          complaintId={complaint._id || complaint.id || ""}
+          found={claiming}
+          claimantEmail={claimantEmail}
+          onClose={() => setClaiming(null)}
+          onVerified={() => {
+            setClaiming(null);
+            onClaimed();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -523,11 +586,18 @@ function ComplaintCard({
 function CandidateMatchCard({
   candidate,
   confidence,
+  forComplaintId,
+  claimantEmail,
+  onClaimed,
 }: {
   candidate: TrueOwnerItem;
   confidence: number;
   forComplaintId: string;
+  claimantEmail: string;
+  onClaimed: () => void;
 }) {
+  const [claiming, setClaiming] = useState(false);
+
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col justify-between gap-4">
       <div className="flex flex-col gap-3">
@@ -553,15 +623,184 @@ function CandidateMatchCard({
       <div className="pt-3 border-t border-paperDark flex items-center justify-between">
         <span className="text-xs text-ink/50">Reported by {candidate.reportedBy}</span>
         <button
-          onClick={() =>
-            alert(
-              `To claim this item, your filed secret features will be compared against the founder's item. Prompt: "${candidate.challengeQuestion || 'Answer ownership challenge'}"`
-            )
-          }
+          onClick={() => setClaiming(true)}
           className="bg-purple text-white px-4 py-2 rounded-full text-xs font-semibold hover:bg-blue transition-colors shadow-xs"
         >
           Claim This Match
         </button>
+      </div>
+
+      {claiming && (
+        <ClaimModal
+          complaintId={forComplaintId}
+          found={candidate}
+          claimantEmail={claimantEmail}
+          onClose={() => setClaiming(false)}
+          onVerified={() => {
+            setClaiming(false);
+            onClaimed();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
+// Component: Claim Modal — answers the finder's challenge question(s).
+// Backend hashes + majority-matches these against the finder's secret
+// answers; a single lucky guess can't fake ownership.
+// =========================================================================
+function ClaimModal({
+  complaintId,
+  found,
+  claimantEmail,
+  onClose,
+  onVerified,
+}: {
+  complaintId: string;
+  found: TrueOwnerItem;
+  claimantEmail: string;
+  onClose: () => void;
+  onVerified: () => void;
+}) {
+  const questions = found.challengeQuestions && found.challengeQuestions.length > 0
+    ? found.challengeQuestions
+    : ["Describe the identifying secret detail on this item."];
+  const [answers, setAnswers] = useState<string[]>(questions.map(() => ""));
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<ClaimResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg("");
+    setSubmitting(true);
+    try {
+      const api = getApiClient();
+      const res = await api.post("/claims", {
+        complaintId,
+        foundItemId: found._id || found.id,
+        answers,
+        claimantEmail,
+      });
+      setResult(res.data as ClaimResult);
+    } catch (err: any) {
+      setErrorMsg(
+        err?.response?.data?.detail || "Couldn't reach the verification backend. Check Settings and try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white border border-paperDark rounded-2xl p-5 sm:p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+        <div className="flex items-center justify-between pb-3 border-b border-paperDark mb-4">
+          <div>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-purple bg-purple/10 px-2 py-0.5 rounded-md">
+              Ownership Verification
+            </span>
+            <h2 className="font-display text-lg text-ink mt-1">Answer the Secret Challenge</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 shrink-0 rounded-full bg-paper flex items-center justify-center text-ink/60 hover:text-ink"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {!result ? (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <p className="text-xs text-ink/65 leading-relaxed">
+              Only the true owner can answer these correctly. A majority of your answers must match
+              the finder&apos;s hidden secret details &mdash; hashed and never shown to anyone, even admins.
+            </p>
+            {questions.map((q, i) => (
+              <div key={i}>
+                <label className="text-xs font-semibold text-ink/75 block mb-1">
+                  {i + 1}. {q}
+                </label>
+                <input
+                  type="text"
+                  value={answers[i]}
+                  onChange={(e) => {
+                    const next = [...answers];
+                    next[i] = e.target.value;
+                    setAnswers(next);
+                  }}
+                  required
+                  className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
+                />
+              </div>
+            ))}
+
+            {errorMsg && (
+              <div className="bg-brick/10 border border-brick/30 rounded-xl p-2.5 text-xs text-brick flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-paperDark mt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-full text-xs font-semibold text-ink/70 hover:bg-paper"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="bg-purple text-white px-5 py-2 rounded-full text-xs sm:text-sm font-semibold hover:bg-blue transition-colors disabled:opacity-50 shadow-xs"
+              >
+                {submitting ? "Verifying..." : "Submit Answers"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div
+              className={`rounded-xl p-4 flex items-start gap-3 ${
+                result.verified ? "bg-emerald-50 border border-emerald-200" : "bg-brick/10 border border-brick/30"
+              }`}
+            >
+              {result.verified ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-brick shrink-0 mt-0.5" />
+              )}
+              <div className="text-xs leading-relaxed">
+                <p className={`font-semibold mb-1 ${result.verified ? "text-emerald-800" : "text-brick"}`}>
+                  {result.verified ? "Ownership verified!" : "Verification failed"}
+                </p>
+                <p className={result.verified ? "text-emerald-800/80" : "text-brick/80"}>{result.message}</p>
+                <p className="mt-1 text-ink/50">
+                  {result.matchedFields} of {result.totalFields} secret detail(s) matched.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              {!result.verified && (
+                <button
+                  onClick={() => setResult(null)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold text-ink/70 hover:bg-paper"
+                >
+                  Try Again
+                </button>
+              )}
+              <button
+                onClick={result.verified ? onVerified : onClose}
+                className="bg-purple text-white px-5 py-2 rounded-full text-xs sm:text-sm font-semibold hover:bg-blue transition-colors shadow-xs"
+              >
+                {result.verified ? "Done" : "Close"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -708,12 +947,14 @@ function ItemFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-paperDark rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-xl my-8">
-        <div className="flex items-center justify-between pb-4 border-b border-paperDark mb-5">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      {/* Wider on desktop (max-w-3xl instead of max-w-xl), and capped to the viewport height
+          with internal scroll so the whole modal always stays visible on short/small screens. */}
+      <div className="bg-white border border-paperDark rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full max-w-3xl max-h-[95vh] overflow-y-auto shadow-xl">
+        <div className="flex items-center justify-between pb-3 border-b border-paperDark mb-4">
           <div>
             <span
-              className={`text-xs uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-md ${
+              className={`text-[10px] sm:text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-md ${
                 type === "lost"
                   ? "bg-purple/10 text-purple"
                   : "bg-sky/10 text-sky"
@@ -721,27 +962,28 @@ function ItemFormModal({
             >
               {type === "lost" ? "Lost Item Complaint" : "Register Found Item"}
             </span>
-            <h2 className="font-display text-2xl text-ink mt-1">
+            <h2 className="font-display text-lg sm:text-xl text-ink mt-1">
               {type === "lost" ? "File a Lost Complaint" : "Report a Found Product"}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-paper flex items-center justify-center text-ink/60 hover:text-ink font-semibold"
+            className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-full bg-paper flex items-center justify-center text-ink/60 hover:text-ink font-semibold"
           >
             &times;
           </button>
         </div>
 
         {errorMsg && (
-          <div className="mb-4 bg-brick/10 border border-brick/30 rounded-xl p-3 text-xs text-brick flex items-center gap-2">
+          <div className="mb-3 bg-brick/10 border border-brick/30 rounded-xl p-2.5 text-xs text-brick flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
+        {/* Two columns on md+ screens so the form spreads wide instead of stacking tall */}
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+          <div className="md:col-span-2">
             <label className="text-xs font-semibold text-ink/75 block mb-1">
               Product Name / Title *
             </label>
@@ -755,7 +997,8 @@ function ItemFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Category / Date / Location share one compact row on md+ instead of three stacked rows */}
+          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-semibold text-ink/75 block mb-1">
                 Category
@@ -785,23 +1028,23 @@ function ItemFormModal({
                 className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
               />
             </div>
+
+            <div>
+              <label className="text-xs font-semibold text-ink/75 block mb-1">
+                Campus Location
+              </label>
+              <input
+                type="text"
+                placeholder={type === "lost" ? "e.g. Library" : "e.g. Auditorium"}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                required
+                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-ink/75 block mb-1">
-              Campus Location
-            </label>
-            <input
-              type="text"
-              placeholder={type === "lost" ? "e.g. Central Library 2nd Floor Study Table" : "e.g. Main Auditorium Stairs"}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              required
-              className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
-            />
-          </div>
-
-          <div>
+          <div className="md:col-span-2">
             <label className="text-xs font-semibold text-ink/75 block mb-1">
               General Description (Public Visible Traits) *
             </label>
@@ -815,63 +1058,58 @@ function ItemFormModal({
               onChange={(e) => setDescription(e.target.value)}
               required
               rows={2}
-              className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
+              className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender resize-none"
             />
           </div>
 
-          {/* SECRET FEATURES (COMPULSORY FOR LOST COMPLAINT) */}
-          {type === "lost" && (
-            <div className="bg-purple/5 border border-purple/20 rounded-2xl p-4 flex flex-col gap-2">
+          {/* SECRET FEATURES (lost) / CHALLENGE QUESTION (found) sits side-by-side with the
+              image upload block on md+ screens, instead of stacking as two full-width rows. */}
+          {type === "lost" ? (
+            <div className="bg-purple/5 border border-purple/20 rounded-xl p-3 flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 text-purple font-semibold text-xs">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Secret Verification Feature (COMPULSORY &bull; Kept Secret) *</span>
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+                <span>Secret Verification Feature (COMPULSORY) *</span>
               </div>
-              <p className="text-[11px] text-ink/65 leading-relaxed">
-                Tell the secret features of the product that <strong>you know alone</strong> (e.g., specific scratch on bottom corner, lock screen photo, engraving, sticker inside cover, serial number digits).
-                This is <strong>never exposed publicly</strong> and is used to mathematically verify that you are the true owner.
+              <p className="text-[10px] text-ink/60 leading-snug">
+                A detail only <strong>you</strong> know (scratch, sticker, engraving...). Never shown publicly — used to verify true ownership.
               </p>
               <textarea
-                placeholder="e.g. There is a faded blue dinosaur sticker on the inner flap, and a deep diagonal scratch across the charging port."
+                placeholder="e.g. Faded blue dinosaur sticker on the inner flap, deep scratch near the charging port."
                 value={secretFeatures}
                 onChange={(e) => setSecretFeatures(e.target.value)}
                 required
                 rows={3}
-                className="w-full border border-purple/30 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
+                className="w-full border border-purple/30 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white resize-none"
               />
             </div>
-          )}
-
-          {/* CHALLENGE QUESTION (FOR FOUNDER) */}
-          {type === "found" && (
+          ) : (
             <div>
               <label className="text-xs font-semibold text-ink/75 block mb-1">
                 Ownership Challenge Question (Optional prompt for claimant)
               </label>
-              <input
-                type="text"
-                placeholder="e.g. What specific sticker is on the back? / What is written on the keychain?"
+              <textarea
+                placeholder="e.g. What sticker is on the back? What's written on the keychain?"
                 value={challengeQuestion}
                 onChange={(e) => setChallengeQuestion(e.target.value)}
-                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
+                rows={3}
+                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender resize-none"
               />
             </div>
           )}
 
           {/* IMAGE UPLOAD: COMPULSORY FOR FOUND, OPTIONAL FOR LOST */}
-          <div className="border border-paperDark rounded-2xl p-4 bg-paper/40 flex flex-col gap-2">
+          <div className="border border-paperDark rounded-xl p-3 bg-paper/40 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-ink/80 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-purple" />
+                <ImageIcon className="w-3.5 h-3.5 text-purple shrink-0" />
                 {type === "found" ? (
-                  <span className="text-brick font-bold">
-                    Product Image (COMPULSORY for finders &bull; Stored on Cloudinary) *
-                  </span>
+                  <span className="text-brick font-bold">Product Image (COMPULSORY) *</span>
                 ) : (
-                  <span>Product Photo (Optional &bull; Upload old photo if available)</span>
+                  <span>Product Photo (Optional)</span>
                 )}
               </label>
               {type === "found" && (
-                <span className="text-[10px] bg-brick/10 text-brick px-2 py-0.5 rounded-full font-semibold">
+                <span className="text-[10px] bg-brick/10 text-brick px-2 py-0.5 rounded-full font-semibold shrink-0">
                   Required
                 </span>
               )}
@@ -886,20 +1124,20 @@ function ItemFormModal({
             />
 
             {imagePreview && (
-              <div className="mt-2 relative">
+              <div className="mt-1 relative">
                 <img
                   src={imagePreview}
                   alt="Preview"
-                  className="w-full h-36 object-cover rounded-xl border border-paperDark"
+                  className="w-full h-20 object-cover rounded-lg border border-paperDark"
                 />
-                <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
-                  Will be uploaded to Cloudinary
+                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-md backdrop-blur-xs">
+                  Uploads to Cloudinary
                 </span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-paperDark">
+          <div className="md:col-span-2 flex items-center justify-end gap-3 pt-2 border-t border-paperDark mt-1">
             <button
               type="button"
               onClick={onClose}
