@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getApiClient } from "@/lib/apiClient";
-import { ClaimResult, TrueOwnerItem } from "@/types";
+import ChatPanel from "@/components/ChatPanel";
+import { fetchMyThreads } from "@/lib/chatClient";
+import { ChatThread, ClaimResult, TrueOwnerItem } from "@/types";
 import {
   ShieldCheck,
   Search,
@@ -50,6 +52,8 @@ const LOCATIONS = [
   "Others",
 ];
 const OTHERS_LOCATION = "Others";
+// Keep in sync with backend/app/config.py -> chat_min_confidence
+const CHAT_MIN_CONFIDENCE = 50;
 
 export default function TrueOwnerPage() {
   const { data: session } = useSession();
@@ -384,7 +388,11 @@ export default function TrueOwnerPage() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {myFoundItems.map((item) => (
-                        <FoundItemCard key={item._id || item.id} item={item} />
+                        <FoundItemCard
+                          key={item._id || item.id}
+                          item={item}
+                          founderEmail={session?.user?.email || ""}
+                        />
                       ))}
                     </div>
                   )}
@@ -426,6 +434,7 @@ function ComplaintCard({
 }) {
   const [showSecret, setShowSecret] = useState(false);
   const [claiming, setClaiming] = useState<TrueOwnerItem | null>(null);
+  const [chattingWith, setChattingWith] = useState<TrueOwnerItem | null>(null);
 
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col gap-5">
@@ -553,10 +562,12 @@ function ComplaintCard({
                   </p>
                 </div>
                 <button
-                  onClick={() => setClaiming(candidate)}
+                  onClick={() =>
+                    confidence >= CHAT_MIN_CONFIDENCE ? setChattingWith(candidate) : setClaiming(candidate)
+                  }
                   className="bg-purple text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors self-start shadow-xs"
                 >
-                  Verify Ownership (Answer Challenge)
+                  {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Verify Ownership (Answer Challenge)"}
                 </button>
               </div>
             ))}
@@ -573,6 +584,21 @@ function ComplaintCard({
           onVerified={() => {
             setClaiming(null);
             onClaimed();
+          }}
+        />
+      )}
+
+      {chattingWith && (
+        <ChatPanel
+          complaintId={complaint._id || complaint.id || ""}
+          foundItemId={chattingWith._id || chattingWith.id || ""}
+          currentEmail={claimantEmail}
+          isFounder={false}
+          itemTitle={chattingWith.title}
+          onClose={() => setChattingWith(null)}
+          onVerificationUnlocked={() => {
+            setClaiming(chattingWith);
+            setChattingWith(null);
           }}
         />
       )}
@@ -597,6 +623,7 @@ function CandidateMatchCard({
   onClaimed: () => void;
 }) {
   const [claiming, setClaiming] = useState(false);
+  const [chatting, setChatting] = useState(false);
 
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col justify-between gap-4">
@@ -623,10 +650,10 @@ function CandidateMatchCard({
       <div className="pt-3 border-t border-paperDark flex items-center justify-between">
         <span className="text-xs text-ink/50">Reported by {candidate.reportedBy}</span>
         <button
-          onClick={() => setClaiming(true)}
+          onClick={() => (confidence >= CHAT_MIN_CONFIDENCE ? setChatting(true) : setClaiming(true))}
           className="bg-purple text-white px-4 py-2 rounded-full text-xs font-semibold hover:bg-blue transition-colors shadow-xs"
         >
-          Claim This Match
+          {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Claim This Match"}
         </button>
       </div>
 
@@ -639,6 +666,21 @@ function CandidateMatchCard({
           onVerified={() => {
             setClaiming(false);
             onClaimed();
+          }}
+        />
+      )}
+
+      {chatting && (
+        <ChatPanel
+          complaintId={forComplaintId}
+          foundItemId={candidate._id || candidate.id || ""}
+          currentEmail={claimantEmail}
+          isFounder={false}
+          itemTitle={candidate.title}
+          onClose={() => setChatting(false)}
+          onVerificationUnlocked={() => {
+            setChatting(false);
+            setClaiming(true);
           }}
         />
       )}
@@ -807,9 +849,39 @@ function ClaimModal({
 }
 
 // =========================================================================
-// Component: Found Item Card (In Tab 3)
+// Component: Found Item Card (In Tab 3) — also surfaces any chat a claimant
+// opened on this item (only possible once they hit the 85%+ AI match gate).
+// This is the founder's only visibility into incoming claimants.
 // =========================================================================
-function FoundItemCard({ item }: { item: TrueOwnerItem }) {
+function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEmail: string }) {
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [chattingThread, setChattingThread] = useState<ChatThread | null>(null);
+  const itemId = item._id || item.id || "";
+
+  useEffect(() => {
+    if (!founderEmail) return;
+    let cancelled = false;
+    fetchMyThreads(founderEmail)
+      .then((all) => {
+        if (!cancelled) setThreads(all.filter((t) => t.foundItemId === itemId));
+      })
+      .catch(() => {
+        /* founder just won't see the incoming-chat panel if this fails */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [founderEmail, itemId]);
+
+  const statusLabel: Record<ChatThread["status"], string> = {
+    chat: "Chatting — awaiting your verification",
+    verifying: "Verification in progress",
+    verified: "Ownership verified — meet for handover",
+    handed_over: "Handover complete & closed",
+    resolved: "Verified & resolved",
+    closed: "Closed",
+  };
+
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-5 shadow-xs flex flex-col gap-3">
       {item.imageUrl && (
@@ -829,11 +901,77 @@ function FoundItemCard({ item }: { item: TrueOwnerItem }) {
       <p className="text-xs text-ink/65 leading-relaxed line-clamp-3">
         {item.description}
       </p>
+
+      {threads.length > 0 && (
+        <div className="mt-1 pt-3 border-t border-paperDark flex flex-col gap-2">
+          <span className="text-[11px] font-semibold text-purple flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            {threads.length} claimant{threads.length > 1 ? "s" : ""} matched for chat ({CHAT_MIN_CONFIDENCE}%+)
+          </span>
+          {threads.map((t) => (
+            <button
+              key={t.threadId}
+              onClick={() => setChattingThread(t)}
+              className="flex items-center justify-between bg-paper hover:bg-paperDark/50 transition-colors rounded-lg px-3 py-2 text-left"
+            >
+              <span className="text-xs text-ink/75">{statusLabel[t.status]}</span>
+              <span className="text-[10px] text-sky font-semibold">{t.confidence}%</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mt-2 pt-2 border-t border-paperDark text-[11px] text-ink/50">
         Photo stored on Cloudinary &bull; Protected from public browsing
       </div>
+
+      {chattingThread && (
+        <ChatPanel
+          complaintId={chattingThread.complaintId}
+          foundItemId={chattingThread.foundItemId}
+          currentEmail={founderEmail}
+          isFounder
+          itemTitle={item.title}
+          onClose={() => setChattingThread(null)}
+          onVerificationUnlocked={() => {}}
+        />
+      )}
     </div>
   );
+}
+
+// Auto-clean & format user text for high CLIP neural embedding accuracy
+function autoFormatText(text: string): string {
+  if (!text) return "";
+  let t = text.replace(/\s+/g, " ").trim();
+  // Ensure space after punctuation
+  t = t.replace(/\s*([,.:;?!])\s*/g, "$1 ");
+  // Capitalize start of sentences
+  t = t.replace(/(^\s*|[.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+  // Standardize common brand/model keywords
+  const brands: Record<string, string> = {
+    samsung: "Samsung",
+    iphone: "iPhone",
+    apple: "Apple",
+    oneplus: "OnePlus",
+    vivo: "Vivo",
+    oppo: "Oppo",
+    realme: "Realme",
+    redmi: "Redmi",
+    xiaomi: "Xiaomi",
+    dell: "Dell",
+    hp: "HP",
+    lenovo: "Lenovo",
+    asus: "Asus",
+    titan: "Titan",
+    boat: "boAt",
+    fastrack: "Fastrack",
+  };
+  for (const [k, v] of Object.entries(brands)) {
+    const reg = new RegExp(`\\b${k}\\b`, "gi");
+    t = t.replace(reg, v);
+  }
+  return t.trim();
 }
 
 // =========================================================================
@@ -848,15 +986,19 @@ function ItemFormModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Electronics");
   const [location, setLocation] = useState("");
+  const [locationDetail, setLocationDetail] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
-  // Secret feature for lost
+  // Secret feature for lost (one per line -> array)
   const [secretFeatures, setSecretFeatures] = useState("");
-  // Challenge question for found
-  const [challengeQuestion, setChallengeQuestion] = useState("");
+  // Challenge questions + secret answers for found (1 to 3 questions)
+  const [challenges, setChallenges] = useState<{ question: string; answer: string }[]>([
+    { question: "", answer: "" },
+  ]);
 
   // Image upload
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -878,16 +1020,66 @@ function ItemFormModal({
     e.preventDefault();
     setErrorMsg("");
 
-    // Validation: Founder MUST upload an image
-    if (type === "found" && !imageFile && !imagePreview) {
-      setErrorMsg("For found items, uploading a photo is COMPULSORY. Please select an image.");
+    if (!session?.user?.email) {
+      setErrorMsg("You must be signed in with your college account to submit a report.");
       return;
     }
 
-    // Validation: Claimant MUST provide secret features
-    if (type === "lost" && !secretFeatures.trim()) {
-      setErrorMsg("Please specify the secret features only you know. This is required to verify true ownership.");
+    // Common compulsory fields for both Lost and Found
+    if (!title.trim()) {
+      setErrorMsg("Please enter a product title / name.");
       return;
+    }
+
+    if (!category.trim()) {
+      setErrorMsg("Please select a category.");
+      return;
+    }
+
+    if (!date) {
+      setErrorMsg(`Please select the date the item was ${type === "lost" ? "lost" : "found"}.`);
+      return;
+    }
+
+    if (!description.trim()) {
+      setErrorMsg("Please provide a general description (color, model, exterior traits).");
+      return;
+    }
+
+    if (location === OTHERS_LOCATION && !locationDetail.trim()) {
+      setErrorMsg("Please describe the unlisted campus location.");
+      return;
+    }
+
+    // Role-specific validation
+    if (type === "lost") {
+      // Claimant MUST provide secret features (Compulsory)
+      if (!secretFeatures.trim()) {
+        setErrorMsg("Please specify the secret features only you know. This is required to verify true ownership.");
+        return;
+      }
+      // Note: location & image are optional for lost
+    } else {
+      // Founder MUST provide location
+      if (!location.trim()) {
+        setErrorMsg("Location is compulsory for found items — please specify exactly where you found it.");
+        return;
+      }
+
+      // Founder MUST upload an image
+      if (!imageFile && !imagePreview) {
+        setErrorMsg("For found items, uploading a photo is COMPULSORY. Please select an image.");
+        return;
+      }
+
+      // Founder MUST set challenge question(s) + secret answer(s)
+      const validChallenges = challenges.filter(
+        (c) => c.question.trim() && c.answer.trim()
+      );
+      if (validChallenges.length === 0) {
+        setErrorMsg("Please provide at least one Ownership Challenge Question and Secret Answer.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -914,32 +1106,38 @@ function ItemFormModal({
         setUploadingImage(false);
       }
 
-      // 2. Submit item to API
-      const res = await fetch("/api/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          title,
-          category,
-          location,
-          date,
-          description,
-          imageUrl: finalImageUrl,
-          secretFeatures: type === "lost" ? secretFeatures : undefined,
-          challengeQuestion: type === "found" ? challengeQuestion : undefined,
-        }),
+      // 2. Submit item straight to the FastAPI backend (CLIP embedding, hashing,
+      //    and storage all happen there — this used to hit a dead Next.js mock route)
+      const api = getApiClient();
+      await api.post("/items", {
+        type,
+        title,
+        category,
+        location: location || undefined,
+        locationDetail: location === OTHERS_LOCATION ? locationDetail : undefined,
+        date,
+        description,
+        imageUrl: finalImageUrl || undefined,
+        secretFeatures:
+          type === "lost"
+            ? secretFeatures.split("\n").map((s) => s.trim()).filter(Boolean)
+            : undefined,
+        challengeQuestions:
+          type === "found"
+            ? challenges.map((c) => c.question.trim()).filter(Boolean)
+            : undefined,
+        secretAnswers:
+          type === "found"
+            ? challenges.map((c) => c.answer.trim()).filter(Boolean)
+            : undefined,
+        reporterEmail: session!.user!.email,
+        reporterName: session!.user!.name || undefined,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to submit report");
-      }
 
       onSuccess();
     } catch (err: any) {
       console.error("Submission error:", err);
-      setErrorMsg(err?.message || "An error occurred during submission.");
+      setErrorMsg(err?.response?.data?.detail || err?.message || "An error occurred during submission.");
     } finally {
       setSubmitting(false);
       setUploadingImage(false);
@@ -992,6 +1190,10 @@ function ItemFormModal({
               placeholder={type === "lost" ? "e.g. Matte Black HP Pavilion 15 Laptop" : "e.g. Silver Titan Watch with metal strap"}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => setTitle(autoFormatText(title))}
+              spellCheck={true}
+              autoCorrect="on"
+              autoCapitalize="sentences"
               required
               className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
             />
@@ -1031,23 +1233,54 @@ function ItemFormModal({
 
             <div>
               <label className="text-xs font-semibold text-ink/75 block mb-1">
-                Campus Location
+                Campus Location{" "}
+                {type === "found" ? (
+                  <span className="text-brick">(COMPULSORY — where exactly did you find it?)</span>
+                ) : (
+                  <span className="text-ink/40">(optional)</span>
+                )}
               </label>
-              <input
-                type="text"
-                placeholder={type === "lost" ? "e.g. Library" : "e.g. Auditorium"}
+              <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                required
-                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
-              />
+                required={type === "found"}
+                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
+              >
+                <option value="">{type === "found" ? "Select where you found it..." : "Not specified"}</option>
+                {LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+              {location === OTHERS_LOCATION && (
+                <input
+                  type="text"
+                  placeholder="Describe the unlisted location..."
+                  value={locationDetail}
+                  onChange={(e) => setLocationDetail(e.target.value)}
+                  required={type === "found"}
+                  className="w-full mt-2 border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender"
+                />
+              )}
             </div>
           </div>
 
           <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-ink/75 block mb-1">
-              General Description (Public Visible Traits) *
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-ink/75 block">
+                General Description (Public Visible Traits) *
+              </label>
+              {description.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDescription(autoFormatText(description))}
+                  className="text-[10px] text-purple hover:text-blue font-semibold flex items-center gap-1 bg-purple/5 px-2 py-0.5 rounded-md"
+                >
+                  <Sparkles className="w-3 h-3 text-purple" /> Auto-Fix Spelling &amp; Formatting
+                </button>
+              )}
+            </div>
             <textarea
               placeholder={
                 type === "lost"
@@ -1056,6 +1289,10 @@ function ItemFormModal({
               }
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => setDescription(autoFormatText(description))}
+              spellCheck={true}
+              autoCorrect="on"
+              autoCapitalize="sentences"
               required
               rows={2}
               className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender resize-none"
@@ -1071,10 +1308,10 @@ function ItemFormModal({
                 <span>Secret Verification Feature (COMPULSORY) *</span>
               </div>
               <p className="text-[10px] text-ink/60 leading-snug">
-                A detail only <strong>you</strong> know (scratch, sticker, engraving...). Never shown publicly — used to verify true ownership.
+                Detail(s) only <strong>you</strong> know (scratch, sticker, engraving...). One per line if more than one. Never shown publicly — used to verify true ownership.
               </p>
               <textarea
-                placeholder="e.g. Faded blue dinosaur sticker on the inner flap, deep scratch near the charging port."
+                placeholder={"e.g. Faded blue dinosaur sticker on the inner flap\nDeep scratch near the charging port"}
                 value={secretFeatures}
                 onChange={(e) => setSecretFeatures(e.target.value)}
                 required
@@ -1083,17 +1320,81 @@ function ItemFormModal({
               />
             </div>
           ) : (
-            <div>
-              <label className="text-xs font-semibold text-ink/75 block mb-1">
-                Ownership Challenge Question (Optional prompt for claimant)
-              </label>
-              <textarea
-                placeholder="e.g. What sticker is on the back? What's written on the keychain?"
-                value={challengeQuestion}
-                onChange={(e) => setChallengeQuestion(e.target.value)}
-                rows={3}
-                className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender resize-none"
-              />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-ink/75">
+                  Ownership Challenge Questions (1 to 3) *
+                </label>
+                <span className="text-[10px] text-ink/50">
+                  Majority match required to verify true owner
+                </span>
+              </div>
+
+              {challenges.map((c, idx) => (
+                <div
+                  key={idx}
+                  className="bg-paper/40 border border-paperDark rounded-xl p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-purple">
+                      Question #{idx + 1}
+                    </span>
+                    {challenges.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setChallenges(challenges.filter((_, i) => i !== idx))
+                        }
+                        className="text-xs text-brick hover:underline font-medium"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. What sticker is on the back? What wallpaper is on the lock screen?"
+                    value={c.question}
+                    onChange={(e) => {
+                      const next = [...challenges];
+                      next[idx].question = e.target.value;
+                      setChallenges(next);
+                    }}
+                    required
+                    className="w-full border border-paperDark rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
+                  />
+
+                  <label className="text-xs font-semibold text-ink/75 flex items-center gap-1 mt-1">
+                    <Lock className="w-3.5 h-3.5 text-purple shrink-0" />
+                    Secret Answer #{idx + 1} (Hashed &bull; Never shown to claimant) *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="The exact identifying secret answer"
+                    value={c.answer}
+                    onChange={(e) => {
+                      const next = [...challenges];
+                      next[idx].answer = e.target.value;
+                      setChallenges(next);
+                    }}
+                    required
+                    className="w-full border border-paperDark rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
+                  />
+                </div>
+              ))}
+
+              {challenges.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChallenges([...challenges, { question: "", answer: "" }])
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky hover:text-blue self-start py-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add another challenge question (up to 3)
+                </button>
+              )}
             </div>
           )}
 

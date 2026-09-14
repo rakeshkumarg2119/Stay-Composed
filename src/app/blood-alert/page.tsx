@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getApiClient } from "@/lib/apiClient";
@@ -26,11 +26,14 @@ export default function BloodAlertPage() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
 
+  const hasInitializedName = useRef(false);
+
   useEffect(() => {
-    if (session?.user?.name && !studentName) {
+    if (session?.user?.name && !hasInitializedName.current) {
       setStudentName(session.user.name);
+      hasInitializedName.current = true;
     }
-  }, [session, studentName]);
+  }, [session?.user?.name]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

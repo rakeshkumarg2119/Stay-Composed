@@ -9,6 +9,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+          scope: "openid email profile",
+        },
+      },
     })
   );
 }
@@ -43,15 +51,26 @@ export const authOptions: NextAuthOptions = {
     signIn: "/signin",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, profile }) {
       if (user) {
         token.id = user.id;
+        if (user.image) {
+          token.picture = user.image;
+        }
+      }
+      if ((profile as any)?.picture) {
+        token.picture = (profile as any).picture;
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.id) {
-        (session.user as any).id = token.id;
+      if (session.user) {
+        if (token.id) {
+          (session.user as any).id = token.id;
+        }
+        if (token.picture) {
+          session.user.image = token.picture as string;
+        }
       }
       return session;
     },

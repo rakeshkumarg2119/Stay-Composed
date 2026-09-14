@@ -12,3 +12,10 @@ export function setBackendUrl(url: string): void {
 export function clearBackendUrl(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
+
+/** Same backend, but as a ws:// or wss:// URL for the chat WebSocket. */
+export function getWsBackendUrl(): string {
+  const http = getBackendUrl();
+  if (!http) return "";
+  return http.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+}

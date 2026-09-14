@@ -15,7 +15,7 @@ export interface LostFoundItem {
   reportedBy: string; // masked display name, e.g. "Campus Member #4821"
   reportedByUserId?: string;
   reportedByEmail?: string;
-  status: "open" | "matched" | "verified" | "resolved";
+  status: "open" | "matched" | "verified" | "handed_over" | "resolved";
   matchConfidence?: number;
   matchedItemId?: string;
   createdAt: string | Date;
@@ -38,6 +38,28 @@ export interface ClaimResult {
   matchedFields: number;
   totalFields: number;
   message: string;
+  cooldownUntil?: string | Date;
+}
+
+export interface ChatThread {
+  threadId: string;
+  complaintId: string;
+  foundItemId: string;
+  claimantEmail: string;
+  founderEmail: string;
+  confidence: number;
+  status: "chat" | "verifying" | "verified" | "handed_over" | "resolved" | "closed";
+  createdAt: string | Date;
+  verificationStartedAt?: string | Date | null;
+  handedOverAt?: string | Date | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  senderEmail: string;
+  text: string;
+  sentAt: string | Date;
 }
 
 export interface MaskedUser {
