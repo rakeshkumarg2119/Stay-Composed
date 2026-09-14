@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-ink: #241F3D;
+  --color-paper: #F6F5FC;
+  --color-paperDark: #ECEAFB;
+  --color-purple: #6C5CE7;
+  --color-lavender: #B9AEEA;
+  --color-sky: #4FA3E3;
+  --color-blue: #3E63DD;
+  --color-brick: #B8433D;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-fraunces);
+  --font-body: var(--font-inter);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background-color: var(--color-lavender);
+  color: var(--color-ink);
+}
+
+.tag-card {
+  position: relative;
+  background: #FFFFFF;
+  border: 1px solid var(--color-paperDark);
+  padding-left: 1.25rem;
+}
+
+.tag-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+}
+
+.tag-card--lost::before {
+  background-color: var(--color-purple);
+}
+
+.tag-card--found::before {
+  background-color: var(--color-sky);
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #F6F5FC 0%, #ECEAFB 45%, #DCE3FB 100%);
 }
