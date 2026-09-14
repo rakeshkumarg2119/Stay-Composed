@@ -1,21 +1,59 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+
+const providers: NextAuthOptions["providers"] = [];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+}
+
+providers.push(
+  CredentialsProvider({
+    id: "campus-demo",
+    name: "Campus Account",
+    credentials: {
+      name: { label: "Full Name", type: "text", placeholder: "Praveen Kumar" },
+      email: { label: "Campus Email", type: "email", placeholder: "student@campus.edu" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email) return null;
+      return {
+        id: credentials.email.replace(/[^a-zA-Z0-9]/g, "-"),
+        name: credentials.name || credentials.email.split("@")[0],
+        email: credentials.email,
+        image: null,
+      };
+    },
+  })
+);
 
 export const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    }),
-  ],
+  providers,
+  secret: process.env.NEXTAUTH_SECRET || "stay-composed-auth-secret-key-32chars-min",
+  session: {
+    strategy: "jwt",
+  },
   pages: {
     signIn: "/signin",
   },
   callbacks: {
-    async signIn({ profile }) {
-      // Optional: restrict to college email domain later
-      // return profile?.email?.endsWith("@yourcollege.edu") ?? false;
-      return true;
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token.id) {
+        (session.user as any).id = token.id;
+      }
+      return session;
     },
   },
 };

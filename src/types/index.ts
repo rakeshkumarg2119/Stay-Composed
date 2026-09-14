@@ -1,14 +1,27 @@
 export interface LostFoundItem {
   _id?: string;
+  id?: string;
   type: "lost" | "found";
   title: string;
+  category?: string;
+  location?: string;
+  date?: string;
   description: string;
   imageUrl?: string;
-  reportedBy: string; // masked display name
-  reportedByUserId: string;
-  status: "open" | "matched" | "resolved";
-  createdAt: Date;
+  cloudinaryPublicId?: string;
+  // Secret verification features: ONLY for lost complaints, kept secret, never exposed publicly
+  secretFeatures?: string;
+  challengeQuestion?: string; // Prompt/question set for ownership challenge
+  reportedBy: string; // masked display name, e.g. "Campus Member #4821"
+  reportedByUserId?: string;
+  reportedByEmail?: string;
+  status: "open" | "matched" | "verified" | "resolved";
+  matchConfidence?: number;
+  matchedItemId?: string;
+  createdAt: string | Date;
 }
+
+export type TrueOwnerItem = LostFoundItem;
 
 export interface BloodAlertRequest {
   _id?: string;
@@ -16,7 +29,8 @@ export interface BloodAlertRequest {
   bloodType: string;
   phoneNumber: string;
   department: string;
-  createdAt: Date;
+  senderEmail?: string;
+  createdAt: Date | string;
 }
 
 export interface MaskedUser {

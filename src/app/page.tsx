@@ -56,10 +56,10 @@ export default function Home() {
                   Your Profile &amp; Claims
                 </Link>
                 <Link
-                  href="/lost-found"
+                  href="/true-owner"
                   className="inline-flex items-center gap-2 bg-white text-ink border border-paperDark px-5 py-3.5 rounded-full text-sm font-medium hover:border-purple hover:text-purple transition-all shadow-xs"
                 >
-                  Report / Check Items
+                  Open True Owner
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </>
@@ -73,10 +73,10 @@ export default function Home() {
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
-                  href="/lost-found"
+                  href="/true-owner"
                   className="inline-flex items-center gap-2 bg-white text-ink border border-paperDark px-5 py-3.5 rounded-full text-sm font-medium hover:border-purple transition-all shadow-xs"
                 >
-                  Explore Lost &amp; Found
+                  Explore True Owner
                 </Link>
               </>
             )}
@@ -182,15 +182,15 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Card 1: Lost Item */}
+          {/* Card 1: True Owner Lost Complaint */}
           <Link
-            href="/lost-found"
+            href="/true-owner"
             className="tag-card tag-card--lost p-6 rounded-2xl flex flex-col justify-between hover:shadow-md transition-all group bg-white"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs uppercase tracking-wider font-semibold text-purple">
-                  Lost Item
+                  True Owner &bull; Lost
                 </span>
                 <div className="w-8 h-8 rounded-full bg-purple/10 flex items-center justify-center text-purple group-hover:bg-purple group-hover:text-white transition-colors">
                   <Search className="w-4 h-4" />
@@ -200,24 +200,24 @@ export default function Home() {
                 I lost something
               </h3>
               <p className="text-sm text-ink/65 leading-relaxed">
-                Log what you lost with photos and description. CLIP AI quietly scans for matching reports.
+                File a lost complaint with secret verification features. Found items only surface when AI detects candidate matches.
               </p>
             </div>
             <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-purple">
-              <span>Report missing item</span>
+              <span>File lost complaint</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
 
-          {/* Card 2: Found Item */}
+          {/* Card 2: True Owner Found Report */}
           <Link
-            href="/lost-found"
+            href="/true-owner"
             className="tag-card tag-card--found p-6 rounded-2xl flex flex-col justify-between hover:shadow-md transition-all group bg-white"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs uppercase tracking-wider font-semibold text-sky">
-                  Found Item
+                  True Owner &bull; Found
                 </span>
                 <div className="w-8 h-8 rounded-full bg-sky/10 flex items-center justify-center text-sky group-hover:bg-sky group-hover:text-white transition-colors">
                   <HeartHandshake className="w-4 h-4" />
@@ -227,11 +227,11 @@ export default function Home() {
                 I found something
               </h3>
               <p className="text-sm text-ink/65 leading-relaxed">
-                Safely register an item. It stays unlisted until the true owner answers your secret-detail challenge.
+                Safely register an item with a compulsory photo stored on Cloudinary. Stays unlisted until the true owner verifies.
               </p>
             </div>
             <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-sky">
-              <span>Safely hand over</span>
+              <span>Report found product</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

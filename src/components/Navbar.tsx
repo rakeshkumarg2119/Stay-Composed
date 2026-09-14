@@ -13,8 +13,8 @@ export default function Navbar() {
           Stay Composed
         </Link>
         <div className="flex items-center gap-8 text-sm">
-          <Link href="/lost-found" className="text-ink/70 hover:text-purple transition-colors">
-            Lost &amp; Found
+          <Link href="/true-owner" className="text-ink/70 hover:text-purple transition-colors font-medium">
+            True Owner
           </Link>
           <Link href="/blood-alert" className="text-ink/70 hover:text-blue transition-colors">
             Blood Alert
