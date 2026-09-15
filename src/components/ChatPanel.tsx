@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Lock, Send, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, Ban, CheckCircle2, Lock, Send, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import {
   completeHandover,
   connectChatSocket,
@@ -55,6 +55,8 @@ export default function ChatPanel({
   const [draft, setDraft] = useState("");
   const [gateError, setGateError] = useState("");
   const [connError, setConnError] = useState("");
+  const [nudgeNotice, setNudgeNotice] = useState("");
+  const [frozenNotice, setFrozenNotice] = useState("");
   const [starting, setStarting] = useState(false);
   const [completingHandover, setCompletingHandover] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -85,7 +87,24 @@ export default function ChatPanel({
           onHandoverCompleted: () => {
             setThread((prev) => (prev ? { ...prev, status: "handed_over" } : prev));
           },
-          onError: (message) => setConnError(message),
+          onModerationNotice: (tier, message, heldMessageCount) => {
+            if (tier === "nudge") {
+              setNudgeNotice(message);
+            } else {
+              setConnError(
+                heldMessageCount ? `${message} (${heldMessageCount}/3 warnings)` : message
+              );
+            }
+          },
+          onConversationFrozen: (message) => {
+            setThread((prev) => (prev ? { ...prev, status: "frozen" } : prev));
+            setFrozenNotice(message);
+          },
+          onError: (message, allowedMessages) => {
+            setConnError(
+              allowedMessages ? `${message} Allowed: ${allowedMessages.join(" / ")}` : message
+            );
+          },
         });
         wsRef.current = ws;
       } catch (err: any) {
@@ -108,7 +127,17 @@ export default function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const locked = thread?.status === "handed_over" || thread?.status === "closed" || thread?.status === "resolved";
+  useEffect(() => {
+    if (!nudgeNotice) return;
+    const t = setTimeout(() => setNudgeNotice(""), 4000);
+    return () => clearTimeout(t);
+  }, [nudgeNotice]);
+
+  const locked =
+    thread?.status === "handed_over" ||
+    thread?.status === "closed" ||
+    thread?.status === "resolved" ||
+    thread?.status === "frozen";
   const preVerification = thread?.status === "chat"; // backend only allows the 4 fixed questions in this phase
   const activeTemplates = preVerification ? PRE_VERIFICATION_TEMPLATES : POST_VERIFICATION_TEMPLATES;
 
@@ -221,7 +250,14 @@ export default function ChatPanel({
               </div>
             )}
 
-            {locked && (
+            {thread.status === "frozen" && (
+              <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center gap-2 text-red-800 text-xs">
+                <Ban className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{frozenNotice || "This conversation was frozen due to concerning language and is under admin review."}</span>
+              </div>
+            )}
+
+            {locked && thread.status !== "frozen" && (
               <div className="bg-paperDark/60 border-b border-paperDark px-4 py-2.5 flex items-center gap-2 text-ink/80 text-xs">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>🤝 Handover complete! This item was safely returned and the chat is closed.</span>
@@ -247,6 +283,13 @@ export default function ChatPanel({
 
             {connError && (
               <div className="px-4 py-2 text-xs text-brick bg-brick/5 border-b border-brick/20">{connError}</div>
+            )}
+
+            {nudgeNotice && (
+              <div className="px-4 py-2 text-xs text-amber-700 bg-amber-50 border-b border-amber-200 flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                {nudgeNotice}
+              </div>
             )}
 
             {/* Messages list */}
@@ -301,7 +344,9 @@ export default function ChatPanel({
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={locked || preVerification}
                 placeholder={
-                  locked
+                  thread.status === "frozen"
+                    ? "Conversation frozen — under admin review"
+                    : locked
                     ? "Handover complete — chat is closed"
                     : preVerification
                     ? "Pick one of the questions below to send"

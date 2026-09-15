@@ -48,10 +48,11 @@ export interface ChatThread {
   claimantEmail: string;
   founderEmail: string;
   confidence: number;
-  status: "chat" | "verifying" | "verified" | "handed_over" | "resolved" | "closed";
+  status: "chat" | "verifying" | "verified" | "handed_over" | "resolved" | "closed" | "frozen";
   createdAt: string | Date;
   verificationStartedAt?: string | Date | null;
   handedOverAt?: string | Date | null;
+  heldMessageCount?: number;
 }
 
 export interface ChatMessage {
