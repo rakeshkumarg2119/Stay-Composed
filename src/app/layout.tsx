@@ -18,6 +18,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Stay Composed",
   description: "Campus lost & found and blood donation alerts",
+  icons: {
+    icon: "/stay_composed.png",
+  },
 };
 
 export default function RootLayout({

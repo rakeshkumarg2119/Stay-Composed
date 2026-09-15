@@ -419,6 +419,50 @@ export default function TrueOwnerPage() {
 }
 
 // =========================================================================
+// Component: Image Viewer Modal (Full high-resolution inspection)
+// =========================================================================
+function ImageViewerModal({ imageUrl, onClose }: { imageUrl: string; onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-70 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 cursor-zoom-out"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-w-4xl max-h-[90vh] bg-ink/90 border border-white/15 rounded-2xl sm:rounded-3xl p-3 flex flex-col items-center shadow-2xl overflow-hidden cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-full flex items-center justify-between pb-2 mb-2 text-white/90 border-b border-white/10">
+          <span className="text-xs font-semibold flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-sky" /> High-Resolution Photo Inspection
+          </span>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-1 sm:p-3 flex items-center justify-center max-h-[80vh] overflow-auto">
+          <img
+            src={imageUrl}
+            alt="Full Photo"
+            className="max-h-[75vh] w-auto object-contain rounded-xl shadow-lg select-none"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
 // Component: Complaint Card (Shows user's lost complaint & secret features)
 // =========================================================================
 function ComplaintCard({
@@ -435,15 +479,45 @@ function ComplaintCard({
   const [showSecret, setShowSecret] = useState(false);
   const [claiming, setClaiming] = useState<TrueOwnerItem | null>(null);
   const [chattingWith, setChattingWith] = useState<TrueOwnerItem | null>(null);
+  const [chattingThread, setChattingThread] = useState<ChatThread | null>(null);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const complaintId = complaint._id || complaint.id || "";
+
+  useEffect(() => {
+    if (!claimantEmail || !complaintId) return;
+    let cancelled = false;
+    fetchMyThreads(claimantEmail)
+      .then((all) => {
+        if (!cancelled) setThreads(all.filter((t) => t.complaintId === complaintId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [claimantEmail, complaintId]);
 
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col gap-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-paperDark pb-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-xs uppercase tracking-wider font-bold text-purple bg-purple/10 px-2.5 py-0.5 rounded-md">
               Lost Complaint
             </span>
+            {complaint.status === "resolved" ? (
+              <span className="text-xs uppercase tracking-wider font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Resolved &amp; Handed Over
+              </span>
+            ) : complaint.status === "verified" ? (
+              <span className="text-xs uppercase tracking-wider font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Ownership Verified &bull; Pending Handover
+              </span>
+            ) : (
+              <span className="text-xs uppercase tracking-wider font-bold text-sky bg-sky/10 px-2.5 py-0.5 rounded-md">
+                Status: Open
+              </span>
+            )}
             <span className="text-xs text-ink/50">
               Filed on {new Date(complaint.createdAt).toLocaleDateString()}
             </span>
@@ -463,13 +537,26 @@ function ComplaintCard({
         </div>
       </div>
 
+      {/* Handover completion banner */}
+      {complaint.status === "resolved" && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-800 flex items-center gap-2.5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div>
+            <p className="font-semibold">Case Resolved &bull; Item Handed Over</p>
+            <p className="text-emerald-700/80 text-[11px] mt-0.5">
+              This lost item was successfully verified and returned. Handover is complete!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* General Description */}
       <div className="text-xs sm:text-sm text-ink/75 leading-relaxed">
         <strong className="text-ink block mb-1">General Description:</strong>
         {complaint.description}
       </div>
 
-      {/* Secret Verification Features (The Core Differentiator) */}
+      {/* Secret Verification Features */}
       <div className="bg-purple/5 border border-purple/20 rounded-xl p-4 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-purple flex items-center gap-1.5">
@@ -516,68 +603,114 @@ function ComplaintCard({
         </p>
       </div>
 
-      {/* Candidate Matches for this complaint */}
-      <div className="mt-2 pt-4 border-t border-paperDark flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h4 className="font-display text-sm text-ink flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-sky" />
-            Matching Candidate Found Items ({matches.length})
-          </h4>
-          <span className="text-xs text-ink/50">Found items only surface when matching</span>
-        </div>
-
-        {matches.length === 0 ? (
-          <div className="bg-paper rounded-xl p-4 text-xs text-ink/60 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-ink/40" />
-            <span>
-              Searching campus found registry... No candidate matches found yet.
-            </span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {matches.map(({ candidate, confidence }) => (
-              <div
-                key={candidate._id || candidate.id}
-                className="bg-paper border border-paperDark rounded-xl p-4 flex flex-col gap-3"
-              >
-                {candidate.imageUrl && (
-                  <img
-                    src={candidate.imageUrl}
-                    alt={candidate.title}
-                    className="w-full h-36 object-cover rounded-lg border border-paperDark"
-                  />
-                )}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-sky">
-                      {confidence}% AI Confidence
-                    </span>
-                    <span className="text-[11px] text-ink/50">
-                      Found at {candidate.location}
-                    </span>
-                  </div>
-                  <h5 className="font-display text-sm text-ink">{candidate.title}</h5>
-                  <p className="text-xs text-ink/65 line-clamp-2 mt-1">
-                    {candidate.description}
-                  </p>
-                </div>
-                <button
-                  onClick={() =>
-                    confidence >= CHAT_MIN_CONFIDENCE ? setChattingWith(candidate) : setClaiming(candidate)
-                  }
-                  className="bg-purple text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors self-start shadow-xs"
-                >
-                  {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Verify Ownership (Answer Challenge)"}
-                </button>
+      {/* Active Finder Chat & Handover Threads for this complaint */}
+      {threads.length > 0 && (
+        <div className="pt-2 flex flex-col gap-2">
+          <span className="text-[11px] font-semibold text-purple flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            Active Finder Chat &amp; Handover ({threads.length})
+          </span>
+          {threads.map((t) => (
+            <div
+              key={t.threadId}
+              className="flex items-center justify-between bg-paper hover:bg-paperDark/50 transition-colors rounded-xl px-4 py-3 border border-paperDark"
+            >
+              <div>
+                <span className="text-xs font-semibold text-ink/85 block">
+                  {t.status === "handed_over" || t.status === "resolved"
+                    ? "🤝 Handover complete & closed (Resolved)"
+                    : t.status === "verified"
+                    ? "✅ Ownership verified — chat open to coordinate handover"
+                    : t.status === "verifying"
+                    ? "🔒 Verification in progress — answer challenge"
+                    : "💬 Chat active with Finder"}
+                </span>
+                <span className="text-[10px] text-ink/50">AI Match Confidence: {t.confidence}%</span>
               </div>
-            ))}
+              <button
+                onClick={() => setChattingThread(t)}
+                className="bg-purple text-white px-3.5 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors shadow-xs"
+              >
+                {t.status === "handed_over" || t.status === "resolved" ? "View Closed Chat" : "Open Chat with Finder"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Candidate Matches for this complaint */}
+      {complaint.status !== "resolved" && (
+        <div className="mt-2 pt-4 border-t border-paperDark flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-display text-sm text-ink flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-sky" />
+              Matching Candidate Found Items ({matches.length})
+            </h4>
+            <span className="text-xs text-ink/50">Found items only surface when matching</span>
           </div>
-        )}
-      </div>
+
+          {matches.length === 0 ? (
+            <div className="bg-paper rounded-xl p-4 text-xs text-ink/60 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-ink/40" />
+              <span>
+                Searching campus found registry... No candidate matches found yet.
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {matches.map(({ candidate, confidence }) => (
+                <div
+                  key={candidate._id || candidate.id}
+                  className="bg-paper border border-paperDark rounded-xl p-4 flex flex-col gap-3"
+                >
+                  {candidate.imageUrl && (
+                    <div
+                      className="relative rounded-lg overflow-hidden border border-paperDark cursor-pointer group bg-black/5"
+                      onClick={() => setViewingImage(candidate.imageUrl || null)}
+                      title="Click to view full image"
+                    >
+                      <img
+                        src={candidate.imageUrl}
+                        alt={candidate.title}
+                        className="w-full h-36 object-contain rounded-lg transition-transform group-hover:scale-[1.02]"
+                      />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-semibold gap-1 backdrop-blur-2xs">
+                        <Eye className="w-3.5 h-3.5" /> Full Photo
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-sky">
+                        {confidence}% AI Confidence
+                      </span>
+                      <span className="text-[11px] text-ink/50">
+                        Found at {candidate.location}
+                      </span>
+                    </div>
+                    <h5 className="font-display text-sm text-ink">{candidate.title}</h5>
+                    <p className="text-xs text-ink/65 line-clamp-2 mt-1">
+                      {candidate.description}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      confidence >= CHAT_MIN_CONFIDENCE ? setChattingWith(candidate) : setClaiming(candidate)
+                    }
+                    className="bg-purple text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors self-start shadow-xs"
+                  >
+                    {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Verify Ownership (Answer Challenge)"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {claiming && (
         <ClaimModal
-          complaintId={complaint._id || complaint.id || ""}
+          complaintId={complaintId}
           found={claiming}
           claimantEmail={claimantEmail}
           onClose={() => setClaiming(null)}
@@ -590,7 +723,7 @@ function ComplaintCard({
 
       {chattingWith && (
         <ChatPanel
-          complaintId={complaint._id || complaint.id || ""}
+          complaintId={complaintId}
           foundItemId={chattingWith._id || chattingWith.id || ""}
           currentEmail={claimantEmail}
           isFounder={false}
@@ -598,9 +731,30 @@ function ComplaintCard({
           onClose={() => setChattingWith(null)}
           onVerificationUnlocked={() => {
             setClaiming(chattingWith);
-            setChattingWith(null);
+            // Chat remains open behind modal
           }}
         />
+      )}
+
+      {chattingThread && (
+        <ChatPanel
+          complaintId={chattingThread.complaintId}
+          foundItemId={chattingThread.foundItemId}
+          currentEmail={claimantEmail}
+          isFounder={false}
+          itemTitle={complaint.title}
+          onClose={() => setChattingThread(null)}
+          onVerificationUnlocked={() => {
+            const match = matches.find((m) => (m.candidate._id || m.candidate.id) === chattingThread.foundItemId);
+            if (match) {
+              setClaiming(match.candidate);
+            }
+          }}
+        />
+      )}
+
+      {viewingImage && (
+        <ImageViewerModal imageUrl={viewingImage} onClose={() => setViewingImage(null)} />
       )}
     </div>
   );
@@ -624,16 +778,26 @@ function CandidateMatchCard({
 }) {
   const [claiming, setClaiming] = useState(false);
   const [chatting, setChatting] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col justify-between gap-4">
       <div className="flex flex-col gap-3">
         {candidate.imageUrl && (
-          <img
-            src={candidate.imageUrl}
-            alt={candidate.title}
-            className="w-full h-48 object-cover rounded-xl border border-paperDark"
-          />
+          <div
+            className="relative rounded-xl overflow-hidden border border-paperDark cursor-pointer group bg-black/5"
+            onClick={() => setViewingImage(candidate.imageUrl || null)}
+            title="Click to view full image"
+          >
+            <img
+              src={candidate.imageUrl}
+              alt={candidate.title}
+              className="w-full h-48 object-contain rounded-xl transition-transform group-hover:scale-[1.02]"
+            />
+            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-2xs">
+              <Eye className="w-4 h-4" /> Click to view full image
+            </div>
+          </div>
         )}
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold bg-sky/10 text-sky px-2.5 py-1 rounded-md">
@@ -679,10 +843,14 @@ function CandidateMatchCard({
           itemTitle={candidate.title}
           onClose={() => setChatting(false)}
           onVerificationUnlocked={() => {
-            setChatting(false);
             setClaiming(true);
+            // Chat remains open behind modal
           }}
         />
+      )}
+
+      {viewingImage && (
+        <ImageViewerModal imageUrl={viewingImage} onClose={() => setViewingImage(null)} />
       )}
     </div>
   );
@@ -713,6 +881,7 @@ function ClaimModal({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ClaimResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -737,8 +906,8 @@ function ClaimModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white border border-paperDark rounded-2xl p-5 sm:p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+    <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white border border-paperDark rounded-2xl p-5 sm:p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between pb-3 border-b border-paperDark mb-4">
           <div>
             <span className="text-[10px] uppercase tracking-wider font-bold text-purple bg-purple/10 px-2 py-0.5 rounded-md">
@@ -754,11 +923,32 @@ function ClaimModal({
           </button>
         </div>
 
+        {/* Found Product Image preview with full-size inspection */}
+        {found.imageUrl && (
+          <div
+            className="relative rounded-xl overflow-hidden border border-paperDark bg-black/5 cursor-pointer group mb-3"
+            onClick={() => setViewingImage(found.imageUrl || null)}
+            title="Click to view full image"
+          >
+            <img
+              src={found.imageUrl}
+              alt={found.title}
+              className="w-full max-h-48 object-contain rounded-xl p-1 bg-white/50 transition-transform group-hover:scale-[1.01]"
+            />
+            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold backdrop-blur-2xs">
+              <Eye className="w-4 h-4" /> Click to inspect full image
+            </div>
+            <span className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs flex items-center gap-1">
+              <Eye className="w-3 h-3" /> Inspect Photo
+            </span>
+          </div>
+        )}
+
         {!result ? (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <p className="text-xs text-ink/65 leading-relaxed">
               Only the true owner can answer these correctly. A majority of your answers must match
-              the finder&apos;s hidden secret details &mdash; hashed and never shown to anyone, even admins.
+              the finder&apos;s hidden secret details. <strong>AI semantic matching is active</strong> &mdash; so correct answers in different phrasing won&apos;t lock you out.
             </p>
             {questions.map((q, i) => (
               <div key={i}>
@@ -799,7 +989,7 @@ function ClaimModal({
                 disabled={submitting}
                 className="bg-purple text-white px-5 py-2 rounded-full text-xs sm:text-sm font-semibold hover:bg-blue transition-colors disabled:opacity-50 shadow-xs"
               >
-                {submitting ? "Verifying..." : "Submit Answers"}
+                {submitting ? "Verifying with AI..." : "Submit Answers"}
               </button>
             </div>
           </form>
@@ -843,6 +1033,10 @@ function ClaimModal({
             </div>
           </div>
         )}
+
+        {viewingImage && (
+          <ImageViewerModal imageUrl={viewingImage} onClose={() => setViewingImage(null)} />
+        )}
       </div>
     </div>
   );
@@ -856,6 +1050,7 @@ function ClaimModal({
 function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEmail: string }) {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [chattingThread, setChattingThread] = useState<ChatThread | null>(null);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   const itemId = item._id || item.id || "";
 
   useEffect(() => {
@@ -885,11 +1080,20 @@ function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEma
   return (
     <div className="bg-white border border-paperDark rounded-2xl p-5 shadow-xs flex flex-col gap-3">
       {item.imageUrl && (
-        <img
-          src={item.imageUrl}
-          alt={item.title}
-          className="w-full h-44 object-cover rounded-xl border border-paperDark"
-        />
+        <div
+          className="relative rounded-xl overflow-hidden border border-paperDark cursor-pointer group bg-black/5"
+          onClick={() => setViewingImage(item.imageUrl || null)}
+          title="Click to view full image"
+        >
+          <img
+            src={item.imageUrl}
+            alt={item.title}
+            className="w-full h-44 object-contain rounded-xl transition-transform group-hover:scale-[1.02]"
+          />
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-2xs">
+            <Eye className="w-4 h-4" /> Click to view full image
+          </div>
+        </div>
       )}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-md">
@@ -935,6 +1139,10 @@ function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEma
           onClose={() => setChattingThread(null)}
           onVerificationUnlocked={() => {}}
         />
+      )}
+
+      {viewingImage && (
+        <ImageViewerModal imageUrl={viewingImage} onClose={() => setViewingImage(null)} />
       )}
     </div>
   );
@@ -1006,6 +1214,7 @@ function ItemFormModal({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files[0]) {
@@ -1399,41 +1608,60 @@ function ItemFormModal({
           )}
 
           {/* IMAGE UPLOAD: COMPULSORY FOR FOUND, OPTIONAL FOR LOST */}
-          <div className="border border-paperDark rounded-xl p-3 bg-paper/40 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-ink/80 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-purple shrink-0" />
-                {type === "found" ? (
-                  <span className="text-brick font-bold">Product Image (COMPULSORY) *</span>
-                ) : (
-                  <span>Product Photo (Optional)</span>
+          <div className="border border-paperDark rounded-xl p-3 sm:p-4 bg-paper/40 flex flex-col justify-between gap-3 h-full">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-ink/80 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-purple shrink-0" />
+                  {type === "found" ? (
+                    <span className="text-brick font-bold">Product Image (COMPULSORY) *</span>
+                  ) : (
+                    <span>Product Photo (Optional)</span>
+                  )}
+                </label>
+                {type === "found" && (
+                  <span className="text-[10px] bg-brick/10 text-brick px-2 py-0.5 rounded-full font-semibold shrink-0">
+                    Required
+                  </span>
                 )}
-              </label>
-              {type === "found" && (
-                <span className="text-[10px] bg-brick/10 text-brick px-2 py-0.5 rounded-full font-semibold shrink-0">
-                  Required
-                </span>
-              )}
+              </div>
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                required={type === "found"}
+                className="w-full text-xs text-ink/65 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple file:text-white hover:file:bg-blue cursor-pointer"
+              />
             </div>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              required={type === "found"}
-              className="text-xs text-ink/65 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple file:text-white hover:file:bg-blue cursor-pointer"
-            />
-
-            {imagePreview && (
-              <div className="mt-1 relative">
+            {imagePreview ? (
+              <div
+                className="flex-1 min-h-[160px] max-h-[360px] flex flex-col items-center justify-center relative rounded-xl overflow-hidden border border-paperDark bg-black/5 group cursor-pointer"
+                onClick={() => setViewingImage(imagePreview)}
+                title="Click to view full image"
+              >
                 <img
                   src={imagePreview}
                   alt="Preview"
-                  className="w-full h-20 object-cover rounded-lg border border-paperDark"
+                  className="w-full h-full min-h-[160px] max-h-[340px] object-contain rounded-lg p-1 transition-transform group-hover:scale-[1.01]"
                 />
-                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-md backdrop-blur-xs">
-                  Uploads to Cloudinary
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold backdrop-blur-2xs">
+                  <Eye className="w-4 h-4" /> Click to view full image
+                </div>
+                <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded-md backdrop-blur-xs flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> Full View Available
                 </span>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[140px] flex flex-col items-center justify-center border-2 border-dashed border-paperDark rounded-xl p-4 text-center bg-white/40">
+                <ImageIcon className="w-8 h-8 text-ink/20 mb-1.5" />
+                <p className="text-xs font-medium text-ink/60">No image selected yet</p>
+                <p className="text-[10px] text-ink/40 mt-0.5">
+                  {type === "found"
+                    ? "Photo dynamically expands to match challenge questions"
+                    : "Add photo to help AI match visual traits"}
+                </p>
               </div>
             )}
           </div>
@@ -1465,6 +1693,10 @@ function ItemFormModal({
             </button>
           </div>
         </form>
+
+        {viewingImage && (
+          <ImageViewerModal imageUrl={viewingImage} onClose={() => setViewingImage(null)} />
+        )}
       </div>
     </div>
   );

@@ -96,7 +96,7 @@ export default function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const locked = thread?.status === "handed_over" || thread?.status === "closed";
+  const locked = thread?.status === "handed_over" || thread?.status === "closed" || thread?.status === "resolved";
 
   function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();

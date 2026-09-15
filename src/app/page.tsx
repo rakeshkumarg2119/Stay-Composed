@@ -14,6 +14,8 @@ import {
   EyeOff,
   UserCheck,
   ArrowRight,
+  Download,
+  Smartphone,
 } from "lucide-react";
 
 export default function Home() {
@@ -45,7 +47,7 @@ export default function Home() {
             when blood is urgently needed.
           </p>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {session ? (
               <>
                 <Link
@@ -80,6 +82,16 @@ export default function Home() {
                 </Link>
               </>
             )}
+
+            <a
+              href="/downloads/stay-composed-app.apk"
+              download="StayComposed-v1.0.apk"
+              className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 px-5 py-3.5 rounded-full text-sm font-semibold transition-all shadow-xs"
+              title="Download Stay Composed Android App (.apk)"
+            >
+              <Smartphone className="w-4 h-4 text-emerald-600" />
+              Download App (APK)
+            </a>
           </div>
 
           {!session && (
@@ -366,6 +378,47 @@ export default function Home() {
             <p className="text-xs text-ink/65 leading-relaxed">
               Coordinate exchange at designated campus spots (Library, Admin block). Structured chat auto-closes once complete.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Mobile App Download Banner */}
+      <section className="bg-gradient-to-r from-emerald-900 via-ink to-purple text-white rounded-3xl p-6 sm:p-10 lg:p-12 shadow-lg flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-purple/25 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col gap-4 max-w-xl z-10">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-3 py-1 rounded-full text-xs font-semibold text-emerald-300 w-fit">
+            <Smartphone className="w-3.5 h-3.5" /> Android App Available
+          </div>
+          <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl leading-tight">
+            Take Stay Composed with you across campus.
+          </h2>
+          <p className="text-white/80 text-xs sm:text-sm leading-relaxed">
+            Report found items instantly with native camera capture, receive instant match notifications, and coordinate safe handovers on the go. Available for direct download via APK.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <a
+              href="/downloads/stay-composed-app.apk"
+              download="StayComposed-v1.0.apk"
+              className="inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-ink font-semibold px-6 py-3 rounded-full text-sm transition-all shadow-md active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              Download APK (v1.0.0)
+            </a>
+            <span className="text-[11px] text-white/60">
+              Android 8.0+ &bull; No Play Store Needed &bull; Direct Sideload
+            </span>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex items-center justify-center p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xs z-10 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
+              <Smartphone className="w-8 h-8" />
+            </div>
+            <span className="font-display text-base font-semibold">Stay Composed Mobile</span>
+            <span className="text-[11px] text-emerald-300 font-mono">stay-composed.apk</span>
           </div>
         </div>
       </section>
