@@ -12,14 +12,38 @@ import {
 } from "@/lib/chatClient";
 import { ChatMessage, ChatThread } from "@/types";
 
-// Backend only accepts these exact strings while thread.status === "chat"
-// (see PRE_VERIFICATION_MESSAGES in chat.py). Don't edit the wording here
-// without updating the backend set too — they must match exactly.
-const PRE_VERIFICATION_TEMPLATES = [
+// Backend allows these pre-verification strings while thread.status === "chat".
+// Tailored distinctly for Finder and Loster (Claimant), with both Questions and Answers.
+const LOSTER_QUESTIONS = [
   "Where exactly did you find it?",
-  "Can you describe the item?",
   "What time did you find it?",
+  "Can you describe the item's condition?",
   "Can you share a safe public meeting point?",
+  "Are you ready to initiate the verification challenge?",
+];
+
+const LOSTER_ANSWERS = [
+  "I lost it on campus earlier today.",
+  "I lost it near the library / canteen area.",
+  "It has my personal marks and contents inside.",
+  "I can verify the secret challenge questions.",
+  "Yes, I am available to meet and verify.",
+];
+
+const FINDER_QUESTIONS = [
+  "Can you describe key details or unique marks on the item?",
+  "When and where approximately did you lose it?",
+  "What brand, color, or model is the item?",
+  "Are you ready to answer the verification challenge?",
+  "Can you share a safe public meeting point?",
+];
+
+const FINDER_ANSWERS = [
+  "I found it near the campus grounds / academic block.",
+  "I found it earlier today and kept it safe.",
+  "The item is in good condition and kept securely.",
+  "Let's coordinate at a campus security desk or public spot.",
+  "Please answer the verification challenge so we can proceed.",
 ];
 
 // Free-form logistics chips — only usable once status === "verified",
@@ -59,6 +83,8 @@ export default function ChatPanel({
   const [frozenNotice, setFrozenNotice] = useState("");
   const [starting, setStarting] = useState(false);
   const [completingHandover, setCompletingHandover] = useState(false);
+  const [templateTab, setTemplateTab] = useState<"questions" | "answers">("questions");
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,12 +97,19 @@ export default function ChatPanel({
         if (cancelled) return;
         setThread(t);
 
+        const otherTargetEmail = isFounder ? t.claimantEmail : t.founderEmail;
+
         const history = await fetchMessages(t.threadId, currentEmail);
         if (cancelled) return;
         setMessages(history);
 
         const ws = connectChatSocket(t.threadId, currentEmail, {
           onMessage: (msg) => setMessages((prev) => [...prev, msg]),
+          onPresenceChange: (onlineEmails) => {
+            if (otherTargetEmail) {
+              setIsOtherOnline(onlineEmails.some((e) => e.toLowerCase() === otherTargetEmail.toLowerCase()));
+            }
+          },
           onVerificationStarted: () => {
             setThread((prev) => (prev ? { ...prev, status: "verifying" } : prev));
             if (!isFounder) onVerificationUnlocked();
@@ -138,8 +171,14 @@ export default function ChatPanel({
     thread?.status === "closed" ||
     thread?.status === "resolved" ||
     thread?.status === "frozen";
-  const preVerification = thread?.status === "chat"; // backend only allows the 4 fixed questions in this phase
-  const activeTemplates = preVerification ? PRE_VERIFICATION_TEMPLATES : POST_VERIFICATION_TEMPLATES;
+  const preVerification = thread?.status === "chat";
+  const preVerificationQuestions = isFounder ? FINDER_QUESTIONS : LOSTER_QUESTIONS;
+  const preVerificationAnswers = isFounder ? FINDER_ANSWERS : LOSTER_ANSWERS;
+  const activeTemplates = preVerification
+    ? templateTab === "questions"
+      ? preVerificationQuestions
+      : preVerificationAnswers
+    : POST_VERIFICATION_TEMPLATES;
 
   function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -189,15 +228,46 @@ export default function ChatPanel({
       <div className="bg-white border border-paperDark rounded-2xl sm:rounded-3xl w-full max-w-lg h-[85vh] sm:h-[650px] flex flex-col shadow-xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-paperDark bg-paper/60">
-          <div>
-            <span className="text-[10px] uppercase tracking-wider font-bold text-sky bg-sky/10 px-2 py-0.5 rounded-md">
-              {thread ? `${thread.confidence}% AI Match Chat` : "Opening chat..."}
-            </span>
-            <h2 className="font-display text-sm text-ink mt-1 line-clamp-1">{itemTitle}</h2>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-9 h-9 rounded-full bg-purple/10 border border-purple/20 flex items-center justify-center text-purple font-display font-semibold text-xs shadow-2xs">
+                {(isFounder ? thread?.claimantName || "O" : thread?.founderName || "F").charAt(0).toUpperCase()}
+              </div>
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                  isOtherOnline ? "bg-emerald-500" : "bg-gray-300"
+                }`}
+                title={isOtherOnline ? "Online now" : "Offline"}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-sm font-semibold text-ink line-clamp-1">
+                  {isFounder ? thread?.claimantName || "Item Owner" : thread?.founderName || "Item Finder"}
+                </h2>
+                <span className="text-[10px] text-ink/60 uppercase tracking-wider font-semibold bg-white border border-paperDark px-1.5 py-0.2 rounded-md">
+                  {isFounder ? "Owner" : "Finder"}
+                </span>
+                <span className="flex items-center gap-1 text-[11px] font-medium">
+                  {isOtherOnline ? (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-ping" />
+                      Online
+                    </span>
+                  ) : (
+                    <span className="text-ink/40">Offline</span>
+                  )}
+                </span>
+              </div>
+              <p className="text-[11px] text-ink/60 line-clamp-1 mt-0.5">
+                {thread ? `${thread.confidence}% AI Match • ${itemTitle}` : itemTitle}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 shrink-0 rounded-full bg-white flex items-center justify-center text-ink/60 hover:text-ink border border-paperDark"
+            className="w-7 h-7 shrink-0 rounded-full bg-white flex items-center justify-center text-ink/60 hover:text-ink border border-paperDark shadow-2xs"
+            title="Close chat"
           >
             <X className="w-4 h-4" />
           </button>
@@ -319,20 +389,71 @@ export default function ChatPanel({
 
             {/* Quick Template Chips */}
             {!locked && (
-              <div className="px-3 pt-2 pb-1 border-t border-paperDark/50 bg-paper/30 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                <span className="text-[10px] uppercase font-bold text-ink/40 tracking-wider shrink-0 mr-1">
-                  {preVerification ? "Ask:" : "Quick:"}
-                </span>
-                {activeTemplates.map((tmpl, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleQuickSend(tmpl)}
-                    className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/75 hover:text-purple text-[11px] px-2.5 py-1 rounded-full transition-all shadow-2xs"
-                  >
-                    {tmpl}
-                  </button>
-                ))}
+              <div className="px-3 pt-2.5 pb-2 border-t border-paperDark/60 bg-paper/40 flex flex-col gap-1.5">
+                {preVerification ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-ink/40 tracking-wider">
+                          {isFounder ? "Finder Mode:" : "Owner Mode:"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTemplateTab("questions")}
+                          className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold transition-all ${
+                            templateTab === "questions"
+                              ? "bg-purple text-white shadow-2xs"
+                              : "bg-white text-ink/60 border border-paperDark hover:text-ink"
+                          }`}
+                        >
+                          Questions ({preVerificationQuestions.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTemplateTab("answers")}
+                          className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold transition-all ${
+                            templateTab === "answers"
+                              ? "bg-purple text-white shadow-2xs"
+                              : "bg-white text-ink/60 border border-paperDark hover:text-ink"
+                          }`}
+                        >
+                          Answers ({preVerificationAnswers.length})
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-ink/45 hidden xs:inline">
+                        {templateTab === "questions" ? "Ask safely" : "Reply safely"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                      {activeTemplates.map((tmpl, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleQuickSend(tmpl)}
+                          className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/80 hover:text-purple text-[11px] px-3 py-1 rounded-full transition-all shadow-2xs active:scale-95"
+                        >
+                          {tmpl}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <span className="text-[10px] uppercase font-bold text-ink/40 tracking-wider shrink-0 mr-1">
+                      Quick:
+                    </span>
+                    {activeTemplates.map((tmpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleQuickSend(tmpl)}
+                        className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/75 hover:text-purple text-[11px] px-2.5 py-1 rounded-full transition-all shadow-2xs"
+                      >
+                        {tmpl}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -349,7 +470,9 @@ export default function ChatPanel({
                     : locked
                     ? "Handover complete — chat is closed"
                     : preVerification
-                    ? "Pick one of the questions below to send"
+                    ? isFounder
+                      ? "Select a finder question or answer template above to send"
+                      : "Select an owner question or answer template above to send"
                     : "Type a message or click a quick template..."
                 }
                 className="flex-1 border border-paperDark rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-lavender disabled:opacity-50 disabled:bg-paper"

@@ -13,12 +13,22 @@ export default function SignInPage() {
   async function handleDemoSignIn(e: React.FormEvent) {
     e.preventDefault();
     setSigningIn(true);
-    await signIn("campus-demo", {
-      name: demoName,
-      email: demoEmail,
-      callbackUrl: "/true-owner",
-    });
-    setSigningIn(false);
+    try {
+      const res = await signIn("campus-demo", {
+        name: demoName,
+        email: demoEmail,
+        redirect: false,
+        callbackUrl: "/true-owner",
+      });
+      if (res?.ok) {
+        window.location.href = res.url || "/true-owner";
+        return;
+      }
+    } catch (err) {
+      console.error("Sign-in failed:", err);
+    } finally {
+      setSigningIn(false);
+    }
   }
 
   return (

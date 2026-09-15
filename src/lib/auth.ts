@@ -31,11 +31,12 @@ providers.push(
     },
     async authorize(credentials) {
       if (!credentials?.email) return null;
+      const name = credentials.name || credentials.email.split("@")[0];
       return {
         id: credentials.email.replace(/[^a-zA-Z0-9]/g, "-"),
-        name: credentials.name || credentials.email.split("@")[0],
+        name,
         email: credentials.email,
-        image: null,
+        image: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=7c3aed`,
       };
     },
   })

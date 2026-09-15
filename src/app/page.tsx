@@ -86,11 +86,14 @@ export default function Home() {
             <a
               href="/downloads/stay-composed-app.apk"
               download="StayComposed-v1.0.apk"
-              className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 px-5 py-3.5 rounded-full text-sm font-semibold transition-all shadow-xs"
+              className="inline-flex items-center transition-transform hover:scale-105 active:scale-95 shadow-sm rounded-lg overflow-hidden"
               title="Download Stay Composed Android App (.apk)"
             >
-              <Smartphone className="w-4 h-4 text-emerald-600" />
-              Download App (APK)
+              <img
+                src="https://img.shields.io/badge/Download_APK-Android_v1.0.0-3DDC84?style=for-the-badge&logo=android&logoColor=white"
+                alt="Download Android APK"
+                className="h-11 sm:h-12 object-contain"
+              />
             </a>
           </div>
 
@@ -401,10 +404,14 @@ export default function Home() {
             <a
               href="/downloads/stay-composed-app.apk"
               download="StayComposed-v1.0.apk"
-              className="inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-ink font-semibold px-6 py-3 rounded-full text-sm transition-all shadow-md active:scale-95"
+              className="inline-flex items-center transition-transform hover:scale-105 active:scale-95 shadow-md rounded-lg overflow-hidden"
+              title="Download Stay Composed Android App (.apk)"
             >
-              <Download className="w-4 h-4" />
-              Download APK (v1.0.0)
+              <img
+                src="https://img.shields.io/badge/Download_APK-Android_v1.0.0-3DDC84?style=for-the-badge&logo=android&logoColor=white"
+                alt="Download Android APK"
+                className="h-12 sm:h-14 object-contain"
+              />
             </a>
             <span className="text-[11px] text-white/60">
               Android 8.0+ &bull; No Play Store Needed &bull; Direct Sideload

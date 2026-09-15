@@ -50,6 +50,7 @@ type ChatSocketEvent =
   | { type: "handover_completed"; completedBy: string; handedOverAt: string }
   | { type: "moderation_notice"; tier: "nudge" | "held"; message: string; heldMessageCount?: number }
   | { type: "conversation_frozen"; message: string }
+  | { type: "presence"; onlineEmails: string[]; userEmail: string; status: "online" | "offline" }
   | { type: "error"; message: string; allowedMessages?: string[] };
 
 /**
@@ -65,6 +66,7 @@ export function connectChatSocket(
     onHandoverCompleted?: (completedBy: string) => void;
     onModerationNotice?: (tier: "nudge" | "held", message: string, heldMessageCount?: number) => void;
     onConversationFrozen?: (message: string) => void;
+    onPresenceChange?: (onlineEmails: string[], userEmail: string, status: "online" | "offline") => void;
     onError?: (message: string, allowedMessages?: string[]) => void;
     onOpen?: () => void;
     onClose?: () => void;
@@ -84,6 +86,7 @@ export function connectChatSocket(
       else if (data.type === "handover_completed") handlers.onHandoverCompleted?.(data.completedBy);
       else if (data.type === "moderation_notice") handlers.onModerationNotice?.(data.tier, data.message, data.heldMessageCount);
       else if (data.type === "conversation_frozen") handlers.onConversationFrozen?.(data.message);
+      else if (data.type === "presence") handlers.onPresenceChange?.(data.onlineEmails, data.userEmail, data.status);
       else if (data.type === "error") handlers.onError?.(data.message, data.allowedMessages);
     } catch {
       // ignore malformed frame

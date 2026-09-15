@@ -33,23 +33,27 @@ export default function Navbar() {
           <a
             href="/downloads/stay-composed-app.apk"
             download="StayComposed-v1.0.apk"
-            className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full hover:bg-emerald-100 hover:border-emerald-300 transition-all shadow-2xs"
+            className="flex items-center transition-transform hover:scale-105 active:scale-95 shadow-2xs shrink-0"
             title="Download Stay Composed Android App (APK)"
           >
-            <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden xs:inline">App</span> APK
+            <img
+              src="https://img.shields.io/badge/Download_APK-Android_v1.0.0-3DDC84?style=for-the-badge&logo=android&logoColor=white"
+              alt="Download APK"
+              className="h-7 sm:h-8 object-contain rounded"
+            />
           </a>
 
           {session ? (
-            <Link href="/profile" className="flex items-center gap-2">
+            <Link href="/profile" className="flex items-center gap-2" title={session.user?.name ?? "My Profile"}>
               {session.user?.image ? (
                 <img
                   src={session.user.image}
                   alt={session.user.name ?? "Profile"}
-                  className="w-8 h-8 rounded-full border border-paperDark"
+                  className="w-8 h-8 rounded-full border border-paperDark object-cover shadow-2xs"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-purple text-white flex items-center justify-center text-xs font-medium">
+                <div className="w-8 h-8 rounded-full bg-purple text-white flex items-center justify-center text-xs font-medium shadow-2xs">
                   {session.user?.name?.[0] ?? "U"}
                 </div>
               )}
@@ -57,7 +61,7 @@ export default function Navbar() {
           ) : (
             <Link
               href="/signin"
-              className="bg-purple text-white px-4 py-1.5 rounded-full hover:bg-blue transition-colors"
+              className="bg-purple text-white px-4 py-1.5 rounded-full hover:bg-blue transition-colors text-xs sm:text-sm font-medium shadow-2xs"
             >
               Sign in
             </Link>

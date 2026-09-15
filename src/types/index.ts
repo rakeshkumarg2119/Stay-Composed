@@ -47,6 +47,8 @@ export interface ChatThread {
   foundItemId: string;
   claimantEmail: string;
   founderEmail: string;
+  claimantName?: string;
+  founderName?: string;
   confidence: number;
   status: "chat" | "verifying" | "verified" | "handed_over" | "resolved" | "closed" | "frozen";
   createdAt: string | Date;

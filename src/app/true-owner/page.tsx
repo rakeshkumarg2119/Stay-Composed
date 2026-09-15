@@ -1075,6 +1075,7 @@ function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEma
     handed_over: "Handover complete & closed",
     resolved: "Verified & resolved",
     closed: "Closed",
+    frozen: "Frozen — under review",
   };
 
   return (
