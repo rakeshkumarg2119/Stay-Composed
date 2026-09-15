@@ -12,7 +12,19 @@ import {
 } from "@/lib/chatClient";
 import { ChatMessage, ChatThread } from "@/types";
 
-const QUICK_TEMPLATES = [
+// Backend only accepts these exact strings while thread.status === "chat"
+// (see PRE_VERIFICATION_MESSAGES in chat.py). Don't edit the wording here
+// without updating the backend set too — they must match exactly.
+const PRE_VERIFICATION_TEMPLATES = [
+  "Where exactly did you find it?",
+  "Can you describe the item?",
+  "What time did you find it?",
+  "Can you share a safe public meeting point?",
+];
+
+// Free-form logistics chips — only usable once status === "verified",
+// where the backend allows any text.
+const POST_VERIFICATION_TEMPLATES = [
   "📍 Let's meet at Central Library entrance",
   "🏛️ Let's meet at RTA Auditorium reception",
   "☕ Can we meet at the campus canteen?",
@@ -97,10 +109,12 @@ export default function ChatPanel({
   }, [messages]);
 
   const locked = thread?.status === "handed_over" || thread?.status === "closed" || thread?.status === "resolved";
+  const preVerification = thread?.status === "chat"; // backend only allows the 4 fixed questions in this phase
+  const activeTemplates = preVerification ? PRE_VERIFICATION_TEMPLATES : POST_VERIFICATION_TEMPLATES;
 
   function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!draft.trim() || !wsRef.current || locked) return;
+    if (!draft.trim() || !wsRef.current || locked || preVerification) return;
     sendChatMessage(wsRef.current, draft.trim());
     setDraft("");
   }
@@ -264,9 +278,9 @@ export default function ChatPanel({
             {!locked && (
               <div className="px-3 pt-2 pb-1 border-t border-paperDark/50 bg-paper/30 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                 <span className="text-[10px] uppercase font-bold text-ink/40 tracking-wider shrink-0 mr-1">
-                  Quick:
+                  {preVerification ? "Ask:" : "Quick:"}
                 </span>
-                {QUICK_TEMPLATES.map((tmpl, i) => (
+                {activeTemplates.map((tmpl, i) => (
                   <button
                     key={i}
                     type="button"
@@ -285,13 +299,19 @@ export default function ChatPanel({
                 type="text"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                disabled={locked}
-                placeholder={locked ? "Handover complete — chat is closed" : "Type a message or click a quick template..."}
+                disabled={locked || preVerification}
+                placeholder={
+                  locked
+                    ? "Handover complete — chat is closed"
+                    : preVerification
+                    ? "Pick one of the questions below to send"
+                    : "Type a message or click a quick template..."
+                }
                 className="flex-1 border border-paperDark rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-lavender disabled:opacity-50 disabled:bg-paper"
               />
               <button
                 type="submit"
-                disabled={locked || !draft.trim()}
+                disabled={locked || preVerification || !draft.trim()}
                 className="w-9 h-9 shrink-0 rounded-full bg-purple text-white flex items-center justify-center disabled:opacity-40 hover:bg-blue transition-colors"
               >
                 <Send className="w-4 h-4" />

@@ -48,7 +48,9 @@ type ChatSocketEvent =
   | { type: "verification_started"; startedAt: string }
   | { type: "verification_completed"; verified: boolean }
   | { type: "handover_completed"; completedBy: string; handedOverAt: string }
-  | { type: "error"; message: string };
+  | { type: "moderation_notice"; tier: "nudge" | "held"; message: string; heldMessageCount?: number }
+  | { type: "conversation_frozen"; message: string }
+  | { type: "error"; message: string; allowedMessages?: string[] };
 
 /**
  * Thin WebSocket wrapper for one chat thread.
@@ -61,7 +63,9 @@ export function connectChatSocket(
     onVerificationStarted: () => void;
     onVerificationCompleted?: () => void;
     onHandoverCompleted?: (completedBy: string) => void;
-    onError?: (message: string) => void;
+    onModerationNotice?: (tier: "nudge" | "held", message: string, heldMessageCount?: number) => void;
+    onConversationFrozen?: (message: string) => void;
+    onError?: (message: string, allowedMessages?: string[]) => void;
     onOpen?: () => void;
     onClose?: () => void;
   }
@@ -78,7 +82,9 @@ export function connectChatSocket(
       else if (data.type === "verification_started") handlers.onVerificationStarted();
       else if (data.type === "verification_completed") handlers.onVerificationCompleted?.();
       else if (data.type === "handover_completed") handlers.onHandoverCompleted?.(data.completedBy);
-      else if (data.type === "error") handlers.onError?.(data.message);
+      else if (data.type === "moderation_notice") handlers.onModerationNotice?.(data.tier, data.message, data.heldMessageCount);
+      else if (data.type === "conversation_frozen") handlers.onConversationFrozen?.(data.message);
+      else if (data.type === "error") handlers.onError?.(data.message, data.allowedMessages);
     } catch {
       // ignore malformed frame
     }
