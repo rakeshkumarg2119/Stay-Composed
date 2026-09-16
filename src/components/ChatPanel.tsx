@@ -1,50 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Ban, CheckCircle2, Lock, Send, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import {
+  AlertCircle,
+  Ban,
+  CheckCircle2,
+  Lock,
+  Send,
+  ShieldAlert,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import {
   completeHandover,
   connectChatSocket,
   fetchMessages,
   getOrCreateThread,
+  PRE_VERIFICATION_ANSWERS_FINDER,
+  PRE_VERIFICATION_ANSWERS_LOSTER,
+  PRE_VERIFICATION_MESSAGES,
+  PRE_VERIFICATION_QUESTIONS_FINDER,
+  PRE_VERIFICATION_QUESTIONS_LOSTER,
   sendChatMessage,
   startVerification,
 } from "@/lib/chatClient";
 import { ChatMessage, ChatThread } from "@/types";
-
-// Backend allows these pre-verification strings while thread.status === "chat".
-// Tailored distinctly for Finder and Loster (Claimant), with both Questions and Answers.
-const LOSTER_QUESTIONS = [
-  "Where exactly did you find it?",
-  "What time did you find it?",
-  "Can you describe the item's condition?",
-  "Can you share a safe public meeting point?",
-  "Are you ready to initiate the verification challenge?",
-];
-
-const LOSTER_ANSWERS = [
-  "I lost it on campus earlier today.",
-  "I lost it near the library / canteen area.",
-  "It has my personal marks and contents inside.",
-  "I can verify the secret challenge questions.",
-  "Yes, I am available to meet and verify.",
-];
-
-const FINDER_QUESTIONS = [
-  "Can you describe key details or unique marks on the item?",
-  "When and where approximately did you lose it?",
-  "What brand, color, or model is the item?",
-  "Are you ready to answer the verification challenge?",
-  "Can you share a safe public meeting point?",
-];
-
-const FINDER_ANSWERS = [
-  "I found it near the campus grounds / academic block.",
-  "I found it earlier today and kept it safe.",
-  "The item is in good condition and kept securely.",
-  "Let's coordinate at a campus security desk or public spot.",
-  "Please answer the verification challenge so we can proceed.",
-];
 
 // Free-form logistics chips — only usable once status === "verified",
 // where the backend allows any text.
@@ -84,6 +64,9 @@ export default function ChatPanel({
   const [starting, setStarting] = useState(false);
   const [completingHandover, setCompletingHandover] = useState(false);
   const [templateTab, setTemplateTab] = useState<"questions" | "answers">("questions");
+  const [allowedMessagesList, setAllowedMessagesList] = useState<string[]>([
+    ...PRE_VERIFICATION_MESSAGES,
+  ]);
   const [isOtherOnline, setIsOtherOnline] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -107,7 +90,23 @@ export default function ChatPanel({
           onMessage: (msg) => setMessages((prev) => [...prev, msg]),
           onPresenceChange: (onlineEmails) => {
             if (otherTargetEmail) {
-              setIsOtherOnline(onlineEmails.some((e) => e.toLowerCase() === otherTargetEmail.toLowerCase()));
+              setIsOtherOnline(
+                onlineEmails.some(
+                  (e) => e.toLowerCase() === otherTargetEmail.toLowerCase()
+                )
+              );
+            }
+          },
+          onPhaseChanged: (status) => {
+            if (status === "verification_pending" || status === "verifying") {
+              setThread((prev) => (prev ? { ...prev, status: "verifying" } : prev));
+              if (!isFounder) onVerificationUnlocked();
+            } else if (status === "verified") {
+              setThread((prev) => (prev ? { ...prev, status: "verified" } : prev));
+            } else if (status === "handed_over") {
+              setThread((prev) => (prev ? { ...prev, status: "handed_over" } : prev));
+            } else if (status === "frozen") {
+              setThread((prev) => (prev ? { ...prev, status: "frozen" } : prev));
             }
           },
           onVerificationStarted: () => {
@@ -133,9 +132,12 @@ export default function ChatPanel({
             setThread((prev) => (prev ? { ...prev, status: "frozen" } : prev));
             setFrozenNotice(message);
           },
-          onError: (message, allowedMessages) => {
+          onError: (message, allowed) => {
+            if (allowed && allowed.length > 0) {
+              setAllowedMessagesList(allowed);
+            }
             setConnError(
-              allowedMessages ? `${message} Allowed: ${allowedMessages.join(" / ")}` : message
+              allowed ? `${message} Allowed: ${allowed.join(" / ")}` : message
             );
           },
         });
@@ -166,19 +168,31 @@ export default function ChatPanel({
     return () => clearTimeout(t);
   }, [nudgeNotice]);
 
-  const locked =
+  const isVerifying =
+    thread?.status === "verifying" || thread?.status === "verification_pending";
+  const isHandedOver =
     thread?.status === "handed_over" ||
     thread?.status === "closed" ||
-    thread?.status === "resolved" ||
-    thread?.status === "frozen";
+    thread?.status === "resolved";
+  const isFrozen = thread?.status === "frozen";
+  const locked = isHandedOver || isFrozen || isVerifying;
   const preVerification = thread?.status === "chat";
-  const preVerificationQuestions = isFounder ? FINDER_QUESTIONS : LOSTER_QUESTIONS;
-  const preVerificationAnswers = isFounder ? FINDER_ANSWERS : LOSTER_ANSWERS;
+  const isVerified = thread?.status === "verified";
+
+  const preVerificationQuestions = isFounder
+    ? PRE_VERIFICATION_QUESTIONS_FINDER
+    : PRE_VERIFICATION_QUESTIONS_LOSTER;
+  const preVerificationAnswers = isFounder
+    ? PRE_VERIFICATION_ANSWERS_FINDER
+    : PRE_VERIFICATION_ANSWERS_LOSTER;
+
   const activeTemplates = preVerification
     ? templateTab === "questions"
       ? preVerificationQuestions
       : preVerificationAnswers
-    : POST_VERIFICATION_TEMPLATES;
+    : isVerified
+    ? POST_VERIFICATION_TEMPLATES
+    : [];
 
   function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -208,7 +222,11 @@ export default function ChatPanel({
 
   async function handleCompleteHandover() {
     if (!thread) return;
-    if (!confirm("Confirm that the item has been physically handed over? This will close the chat permanently.")) {
+    if (
+      !confirm(
+        "Confirm that the item has been physically handed over? This will close the chat permanently."
+      )
+    ) {
       return;
     }
     setCompletingHandover(true);
@@ -231,7 +249,9 @@ export default function ChatPanel({
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-9 h-9 rounded-full bg-purple/10 border border-purple/20 flex items-center justify-center text-purple font-display font-semibold text-xs shadow-2xs">
-                {(isFounder ? thread?.claimantName || "O" : thread?.founderName || "F").charAt(0).toUpperCase()}
+                {(isFounder ? thread?.claimantName || "O" : thread?.founderName || "F")
+                  .charAt(0)
+                  .toUpperCase()}
               </div>
               <span
                 className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
@@ -243,7 +263,9 @@ export default function ChatPanel({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-display text-sm font-semibold text-ink line-clamp-1">
-                  {isFounder ? thread?.claimantName || "Item Owner" : thread?.founderName || "Item Finder"}
+                  {isFounder
+                    ? thread?.claimantName || "Item Owner"
+                    : thread?.founderName || "Item Finder"}
                 </h2>
                 <span className="text-[10px] text-ink/60 uppercase tracking-wider font-semibold bg-white border border-paperDark px-1.5 py-0.2 rounded-md">
                   {isFounder ? "Owner" : "Finder"}
@@ -281,17 +303,19 @@ export default function ChatPanel({
             </div>
           </div>
         ) : !thread ? (
-          <div className="flex-1 flex items-center justify-center text-xs text-ink/50">Loading chat...</div>
+          <div className="flex-1 flex items-center justify-center text-xs text-ink/50">
+            Loading chat...
+          </div>
         ) : (
           <>
             {/* Status banners */}
-            {thread.status === "verifying" && (
+            {isVerifying && (
               <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-amber-800 text-xs">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
                   {isFounder
-                    ? "Verification active — waiting for claimant to answer challenge."
-                    : "Founder initiated challenge verification. Chat remains open to coordinate!"}
+                    ? "Verification challenge in progress — waiting for claimant to answer."
+                    : "Finder initiated verification. Chat is locked until you answer the challenge!"}
                 </span>
                 {!isFounder && (
                   <button
@@ -304,7 +328,7 @@ export default function ChatPanel({
               </div>
             )}
 
-            {thread.status === "verified" && (
+            {isVerified && (
               <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2.5 flex items-center justify-between gap-2 text-emerald-800 text-xs">
                 <span className="flex items-center gap-1.5 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -320,14 +344,17 @@ export default function ChatPanel({
               </div>
             )}
 
-            {thread.status === "frozen" && (
+            {isFrozen && (
               <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center gap-2 text-red-800 text-xs">
                 <Ban className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{frozenNotice || "This conversation was frozen due to concerning language and is under admin review."}</span>
+                <span>
+                  {frozenNotice ||
+                    "This conversation was frozen due to concerning language and is under admin review."}
+                </span>
               </div>
             )}
 
-            {locked && thread.status !== "frozen" && (
+            {isHandedOver && (
               <div className="bg-paperDark/60 border-b border-paperDark px-4 py-2.5 flex items-center gap-2 text-ink/80 text-xs">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>🤝 Handover complete! This item was safely returned and the chat is closed.</span>
@@ -335,10 +362,10 @@ export default function ChatPanel({
             )}
 
             {/* Founder-only start verification button */}
-            {isFounder && thread.status === "chat" && (
+            {isFounder && preVerification && (
               <div className="px-4 py-2.5 border-b border-paperDark bg-purple/5 flex items-center justify-between gap-3">
                 <p className="text-[11px] text-ink/60 leading-snug">
-                  Confident this is the owner? Start verification to test their secret challenge.
+                  Ready to test ownership? Start verification challenge for the claimant.
                 </p>
                 <button
                   onClick={handleStartVerification}
@@ -352,7 +379,9 @@ export default function ChatPanel({
             )}
 
             {connError && (
-              <div className="px-4 py-2 text-xs text-brick bg-brick/5 border-b border-brick/20">{connError}</div>
+              <div className="px-4 py-2 text-xs text-brick bg-brick/5 border-b border-brick/20">
+                {connError}
+              </div>
             )}
 
             {nudgeNotice && (
@@ -366,16 +395,23 @@ export default function ChatPanel({
             <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
               {messages.length === 0 ? (
                 <p className="text-xs text-ink/40 text-center mt-6">
-                  No messages yet — say hello or pick a quick template below to coordinate.
+                  {preVerification
+                    ? "No messages yet — choose an allowed question below to coordinate safely before verification."
+                    : "No messages yet."}
                 </p>
               ) : (
                 messages.map((m) => {
                   const mine = m.senderEmail === currentEmail;
                   return (
-                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      key={m.id}
+                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                    >
                       <div
                         className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
-                          mine ? "bg-purple text-white rounded-br-sm" : "bg-paper text-ink rounded-bl-sm border border-paperDark/60"
+                          mine
+                            ? "bg-purple text-white rounded-br-sm"
+                            : "bg-paper text-ink rounded-bl-sm border border-paperDark/60"
                         }`}
                       >
                         {m.text}
@@ -430,7 +466,7 @@ export default function ChatPanel({
                           key={i}
                           type="button"
                           onClick={() => handleQuickSend(tmpl)}
-                          className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/80 hover:text-purple text-[11px] px-3 py-1 rounded-full transition-all shadow-2xs active:scale-95"
+                          className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/80 hover:text-purple text-[11px] px-3 py-1.5 rounded-full transition-all shadow-2xs active:scale-95 text-left font-medium"
                         >
                           {tmpl}
                         </button>
@@ -458,17 +494,22 @@ export default function ChatPanel({
             )}
 
             {/* Composer */}
-            <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 border-t border-paperDark bg-white">
+            <form
+              onSubmit={handleSend}
+              className="flex items-center gap-2 px-3 py-3 border-t border-paperDark bg-white"
+            >
               <input
                 type="text"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={locked || preVerification}
                 placeholder={
-                  thread.status === "frozen"
+                  isFrozen
                     ? "Conversation frozen — under admin review"
-                    : locked
+                    : isHandedOver
                     ? "Handover complete — chat is closed"
+                    : isVerifying
+                    ? "Chat locked while verification challenge is pending"
                     : preVerification
                     ? isFounder
                       ? "Select a finder question or answer template above to send"

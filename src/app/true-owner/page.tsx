@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getApiClient } from "@/lib/apiClient";
 import ChatPanel from "@/components/ChatPanel";
 import { fetchMyThreads } from "@/lib/chatClient";
+import { useNotifications } from "@/context/NotificationContext";
 import { ChatThread, ClaimResult, TrueOwnerItem } from "@/types";
 import {
   ShieldCheck,
@@ -25,6 +26,7 @@ import {
   ArrowRight,
   ImageIcon,
   X,
+  RotateCcw,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -57,17 +59,33 @@ const CHAT_MIN_CONFIDENCE = 50;
 
 export default function TrueOwnerPage() {
   const { data: session } = useSession();
+  const { triggerMatchCheck } = useNotifications();
+
   const [myComplaints, setMyComplaints] = useState<TrueOwnerItem[]>([]);
   const [myFoundItems, setMyFoundItems] = useState<TrueOwnerItem[]>([]);
   const [candidateMatches, setCandidateMatches] = useState<
     { candidate: TrueOwnerItem; forComplaintId: string; confidence: number }[]
   >([]);
+  const [chatConfidenceThreshold, setChatConfidenceThreshold] = useState(50);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"complaints" | "matches" | "my-found">("complaints");
   const [backendError, setBackendError] = useState(false);
 
-  // Form modal state
+  // Form modal and Calm Notice state
   const [formType, setFormType] = useState<"lost" | "found" | null>(null);
+  const [calmNotice, setCalmNotice] = useState<{ type: "lost" | "found"; title: string } | null>(null);
+  const [resettingDemo, setResettingDemo] = useState(false);
+  const [resetStatus, setResetStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "matches" || tabParam === "my-found" || tabParam === "complaints") {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -87,11 +105,41 @@ export default function TrueOwnerPage() {
       setMyComplaints(res.data?.myComplaints || []);
       setMyFoundItems(res.data?.myFoundItems || []);
       setCandidateMatches(res.data?.candidateMatches || []);
+      if (res.data?.chatConfidenceThreshold) {
+        setChatConfidenceThreshold(res.data.chatConfidenceThreshold);
+      }
     } catch (err) {
       console.error("Failed to load True Owner data from backend:", err);
       setBackendError(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResetDemoData() {
+    if (
+      !window.confirm(
+        "Clean all demo items, candidate matches, and chat history for presentation test accounts (24suca17@tcarts.in & 24suca111@tcarts.in)?"
+      )
+    ) {
+      return;
+    }
+    setResettingDemo(true);
+    setResetStatus(null);
+    try {
+      const api = getApiClient();
+      const res = await api.delete("/items/demo-reset");
+      setResetStatus(
+        `Demo data reset: cleaned ${res.data?.deletedItems || 0} items & ${res.data?.deletedThreads || 0} chat threads.`
+      );
+      await fetchTrueOwnerData();
+      triggerMatchCheck();
+      setTimeout(() => setResetStatus(null), 5000);
+    } catch (err) {
+      console.error("Failed to reset demo data:", err);
+      alert("Failed to reset demo data. Please verify your backend server.");
+    } finally {
+      setResettingDemo(false);
     }
   }
 
@@ -113,28 +161,38 @@ export default function TrueOwnerPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           {session ? (
             <>
               <button
                 onClick={() => setFormType("lost")}
-                className="inline-flex items-center gap-2 bg-purple text-white px-5 py-3 rounded-full text-xs sm:text-sm font-semibold hover:bg-blue transition-all shadow-xs"
+                className="inline-flex items-center justify-center gap-2 bg-purple text-white px-5 py-3 rounded-full text-xs sm:text-sm font-semibold hover:bg-blue transition-all shadow-xs"
               >
                 <Plus className="w-4 h-4" />
                 File Lost Complaint
               </button>
               <button
                 onClick={() => setFormType("found")}
-                className="inline-flex items-center gap-2 bg-white text-ink border border-paperDark px-5 py-3 rounded-full text-xs sm:text-sm font-semibold hover:border-sky hover:text-sky transition-all shadow-xs"
+                className="inline-flex items-center justify-center gap-2 bg-white text-ink border border-paperDark px-5 py-3 rounded-full text-xs sm:text-sm font-semibold hover:border-sky hover:text-sky transition-all shadow-xs"
               >
                 <Upload className="w-4 h-4" />
                 Report Found Item
+              </button>
+              <button
+                type="button"
+                onClick={handleResetDemoData}
+                disabled={resettingDemo}
+                className="inline-flex items-center justify-center gap-2 bg-paper text-ink/75 border border-paperDark px-4 py-3 rounded-full text-xs sm:text-sm font-semibold hover:border-brick hover:text-brick transition-all shadow-xs disabled:opacity-50"
+                title="Wipe demo items & chats for 24suca17@tcarts.in & 24suca111@tcarts.in between presentations"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 text-purple ${resettingDemo ? "animate-spin" : ""}`} />
+                {resettingDemo ? "Resetting..." : "Reset Demo Data"}
               </button>
             </>
           ) : (
             <Link
               href="/signin"
-              className="inline-flex items-center gap-2 bg-purple text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-blue transition-all shadow-xs"
+              className="inline-flex items-center justify-center gap-2 bg-purple text-white px-6 py-3.5 rounded-full text-sm font-semibold hover:bg-blue transition-all shadow-xs"
             >
               <Lock className="w-4 h-4" />
               Sign in with Campus Account
@@ -143,10 +201,17 @@ export default function TrueOwnerPage() {
         </div>
       </div>
 
+      {resetStatus && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs px-4 py-3 rounded-2xl flex items-center gap-2 shadow-xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{resetStatus}</span>
+        </div>
+      )}
+
       {/* Main Grid: Sidebar + Content */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[380px_1fr] gap-8 xl:gap-10">
         {/* Sidebar */}
-        <aside className="flex flex-col gap-6">
+        <aside className="flex flex-col gap-6 order-2 lg:order-1">
           <div className="tag-card tag-card--found p-5">
             <p className="text-xs uppercase tracking-wider font-semibold text-sky mb-1">
               Your True Owner Activity
@@ -204,9 +269,9 @@ export default function TrueOwnerPage() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 order-1 lg:order-2">
           {!session ? (
-            <div className="bg-white border border-paperDark rounded-3xl p-10 sm:p-14 text-center flex flex-col items-center gap-4 shadow-xs">
+            <div className="bg-white border border-paperDark rounded-3xl p-6 sm:p-10 lg:p-14 text-center flex flex-col items-center gap-4 shadow-xs">
               <div className="w-14 h-14 rounded-full bg-purple/10 text-purple flex items-center justify-center">
                 <Lock className="w-6 h-6" />
               </div>
@@ -244,12 +309,12 @@ export default function TrueOwnerPage() {
                 </div>
               )}
 
-              {/* Navigation Tabs */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-paperDark pb-4">
-                <div className="flex gap-2">
+              {/* Navigation Tabs - Horizontally scrollable on mobile */}
+              <div className="border-b border-paperDark pb-3 -mx-2 px-2 overflow-x-auto scrollbar-none">
+                <div className="flex gap-2 min-w-max pb-1">
                   <button
                     onClick={() => setActiveTab("complaints")}
-                    className={`px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all ${
+                    className={`px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                       activeTab === "complaints"
                         ? "bg-purple text-white shadow-xs"
                         : "bg-white text-ink/70 border border-paperDark hover:border-purple"
@@ -259,7 +324,7 @@ export default function TrueOwnerPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab("matches")}
-                    className={`px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all ${
+                    className={`px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                       activeTab === "matches"
                         ? "bg-sky text-white shadow-xs"
                         : "bg-white text-ink/70 border border-paperDark hover:border-sky"
@@ -269,7 +334,7 @@ export default function TrueOwnerPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab("my-found")}
-                    className={`px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all ${
+                    className={`px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                       activeTab === "my-found"
                         ? "bg-ink text-white shadow-xs"
                         : "bg-white text-ink/70 border border-paperDark hover:border-ink"
@@ -316,6 +381,7 @@ export default function TrueOwnerPage() {
                             complaint={complaint}
                             matches={matchesForThis}
                             claimantEmail={session?.user?.email || ""}
+                            chatConfidenceThreshold={chatConfidenceThreshold}
                             onClaimed={fetchTrueOwnerData}
                           />
                         );
@@ -357,6 +423,7 @@ export default function TrueOwnerPage() {
                           confidence={confidence}
                           forComplaintId={forComplaintId}
                           claimantEmail={session?.user?.email || ""}
+                          chatConfidenceThreshold={chatConfidenceThreshold}
                           onClaimed={fetchTrueOwnerData}
                         />
                       ))}
@@ -392,6 +459,7 @@ export default function TrueOwnerPage() {
                           key={item._id || item.id}
                           item={item}
                           founderEmail={session?.user?.email || ""}
+                          chatConfidenceThreshold={chatConfidenceThreshold}
                         />
                       ))}
                     </div>
@@ -408,12 +476,136 @@ export default function TrueOwnerPage() {
         <ItemFormModal
           type={formType}
           onClose={() => setFormType(null)}
-          onSuccess={() => {
+          onSuccess={(data) => {
             setFormType(null);
+            setCalmNotice(data);
             fetchTrueOwnerData();
+            triggerMatchCheck();
           }}
         />
       )}
+
+      {/* Reassuring Calm Confirmation Modal */}
+      {calmNotice && (
+        <CalmNoticeModal
+          type={calmNotice.type}
+          title={calmNotice.title}
+          onClose={() => setCalmNotice(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
+// Component: Calm Notice Modal (Reassures user after filing lost/found item)
+// =========================================================================
+function CalmNoticeModal({
+  type,
+  title,
+  onClose,
+}: {
+  type: "lost" | "found";
+  title: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-70 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-white border border-paperDark rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-200">
+        <div
+          className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs ${
+            type === "lost"
+              ? "bg-purple/10 text-purple border border-purple/20"
+              : "bg-emerald-50 text-emerald-600 border border-emerald-200"
+          }`}
+        >
+          {type === "lost" ? (
+            <Sparkles className="w-7 h-7" />
+          ) : (
+            <ShieldCheck className="w-7 h-7" />
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span
+            className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full self-center ${
+              type === "lost"
+                ? "bg-purple/10 text-purple"
+                : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {type === "lost"
+              ? "Report Registered • Stay Composed"
+              : "Honesty Acknowledged • Stay Composed"}
+          </span>
+          <h3 className="font-display text-2xl text-ink">
+            {type === "lost"
+              ? "Stay Composed — We've Got You Covered"
+              : "Thank You for Your Integrity"}
+          </h3>
+        </div>
+
+        <div className="bg-paper/60 border border-paperDark rounded-2xl p-4 text-xs sm:text-sm text-ink/75 leading-relaxed text-left flex flex-col gap-2.5 w-full">
+          {type === "lost" ? (
+            <>
+              <p>
+                Take a deep breath! Your lost report for{" "}
+                <strong>&ldquo;{title}&rdquo;</strong> has been logged into the secure campus database.
+              </p>
+              <div className="flex items-start gap-2 text-xs">
+                <ShieldCheck className="w-4 h-4 text-purple shrink-0 mt-0.5" />
+                <span>
+                  <strong>Completely Confidential:</strong> Your secret verification features are encrypted and never shown publicly.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-xs">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  <strong>24/7 AI Scanning:</strong> Our model actively compares your report against all found items registered on campus.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Instant Notification &amp; Email:</strong> The second a match is discovered, you will receive an in-app alert and an email will be sent to your registered college email.
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                Stay composed! You have performed an honorable act for our campus community by registering{" "}
+                <strong>&ldquo;{title}&rdquo;</strong>.
+              </p>
+              <div className="flex items-start gap-2 text-xs">
+                <Lock className="w-4 h-4 text-purple shrink-0 mt-0.5" />
+                <span>
+                  <strong>Protected from Fake Claims:</strong> This item is kept unlisted from public browsing to prevent opportunistic claiming.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-xs">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Automated Pairing:</strong> Only an owner whose authentic lost report matches this item will be surfaced.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Notification &amp; Challenge:</strong> You will be alerted via notification and email as soon as a match is established. You can test them with your challenge questions before meeting!
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full bg-purple hover:bg-blue text-white py-3 rounded-full font-semibold text-sm transition-all shadow-xs hover:shadow-sm active:scale-[0.99] mt-2"
+        >
+          OK, Understood
+        </button>
+      </div>
     </div>
   );
 }
@@ -469,11 +661,13 @@ function ComplaintCard({
   complaint,
   matches,
   claimantEmail,
+  chatConfidenceThreshold = 50,
   onClaimed,
 }: {
   complaint: TrueOwnerItem;
   matches: { candidate: TrueOwnerItem; confidence: number }[];
   claimantEmail: string;
+  chatConfidenceThreshold?: number;
   onClaimed: () => void;
 }) {
   const [showSecret, setShowSecret] = useState(false);
@@ -695,11 +889,11 @@ function ComplaintCard({
                   </div>
                   <button
                     onClick={() =>
-                      confidence >= CHAT_MIN_CONFIDENCE ? setChattingWith(candidate) : setClaiming(candidate)
+                      confidence >= chatConfidenceThreshold ? setChattingWith(candidate) : setClaiming(candidate)
                     }
                     className="bg-purple text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-blue transition-colors self-start shadow-xs"
                   >
-                    {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Verify Ownership (Answer Challenge)"}
+                    {confidence >= chatConfidenceThreshold ? "Open Chat with Finder" : "Verify Ownership (Answer Challenge)"}
                   </button>
                 </div>
               ))}
@@ -768,12 +962,14 @@ function CandidateMatchCard({
   confidence,
   forComplaintId,
   claimantEmail,
+  chatConfidenceThreshold = 50,
   onClaimed,
 }: {
   candidate: TrueOwnerItem;
   confidence: number;
   forComplaintId: string;
   claimantEmail: string;
+  chatConfidenceThreshold?: number;
   onClaimed: () => void;
 }) {
   const [claiming, setClaiming] = useState(false);
@@ -814,10 +1010,10 @@ function CandidateMatchCard({
       <div className="pt-3 border-t border-paperDark flex items-center justify-between">
         <span className="text-xs text-ink/50">Reported by {candidate.reportedBy}</span>
         <button
-          onClick={() => (confidence >= CHAT_MIN_CONFIDENCE ? setChatting(true) : setClaiming(true))}
+          onClick={() => (confidence >= chatConfidenceThreshold ? setChatting(true) : setClaiming(true))}
           className="bg-purple text-white px-4 py-2 rounded-full text-xs font-semibold hover:bg-blue transition-colors shadow-xs"
         >
-          {confidence >= CHAT_MIN_CONFIDENCE ? "Open Chat with Finder" : "Claim This Match"}
+          {confidence >= chatConfidenceThreshold ? "Open Chat with Finder" : "Claim This Match"}
         </button>
       </div>
 
@@ -1047,7 +1243,15 @@ function ClaimModal({
 // opened on this item (only possible once they hit the 85%+ AI match gate).
 // This is the founder's only visibility into incoming claimants.
 // =========================================================================
-function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEmail: string }) {
+function FoundItemCard({
+  item,
+  founderEmail,
+  chatConfidenceThreshold = 50,
+}: {
+  item: TrueOwnerItem;
+  founderEmail: string;
+  chatConfidenceThreshold?: number;
+}) {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [chattingThread, setChattingThread] = useState<ChatThread | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
@@ -1071,6 +1275,7 @@ function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEma
   const statusLabel: Record<ChatThread["status"], string> = {
     chat: "Chatting — awaiting your verification",
     verifying: "Verification in progress",
+    verification_pending: "Verification in progress",
     verified: "Ownership verified — meet for handover",
     handed_over: "Handover complete & closed",
     resolved: "Verified & resolved",
@@ -1111,7 +1316,7 @@ function FoundItemCard({ item, founderEmail }: { item: TrueOwnerItem; founderEma
         <div className="mt-1 pt-3 border-t border-paperDark flex flex-col gap-2">
           <span className="text-[11px] font-semibold text-purple flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5" />
-            {threads.length} claimant{threads.length > 1 ? "s" : ""} matched for chat ({CHAT_MIN_CONFIDENCE}%+)
+            {threads.length} claimant{threads.length > 1 ? "s" : ""} matched for chat ({chatConfidenceThreshold}%+)
           </span>
           {threads.map((t) => (
             <button
@@ -1184,6 +1389,56 @@ function autoFormatText(text: string): string {
 }
 
 // =========================================================================
+// Hackathon Demo Templates for 24suca17@tcarts.in & 24suca111@tcarts.in
+// Either can act as loster or founder interchangeably with full AI workflow
+// =========================================================================
+const DEMO_TEMPLATES = [
+  {
+    name: "Dell Inspiron 15 Laptop",
+    icon: "💻",
+    category: "Electronics",
+    location: "Library Block",
+    lost: {
+      title: "Dell Inspiron 15 3520 Laptop",
+      description: "Carbon black Dell Inspiron 15-inch laptop with Intel Core i5 processor sticker on the palm rest. Clean display with matte finish.",
+      secretFeatures: "Small yellow Pikachu sticker on the bottom left corner near battery\nTiny hairline scratch next to HDMI port",
+    },
+    found: {
+      title: "Dell Inspiron 15 3520 Laptop",
+      description: "Found a black Dell laptop in the reading hall. Preserved safely with security desk.",
+      challenges: [
+        { question: "What sticker is located on the bottom left corner of the laptop casing?", answer: "Yellow Pikachu sticker" },
+        { question: "Are there any distinctive marks near the ports?", answer: "Hairline scratch near HDMI port" },
+      ],
+      // Dell Laptop
+      sampleImagePath: "/demo/dell_laptop.jpg",
+      sampleImageName: "dell_laptop_demo",
+    },
+  },
+  {
+    name: "Titan Brown Leather Wallet",
+    icon: "👛",
+    category: "Wallet / Purse",
+    location: "TK Block",
+    lost: {
+      title: "Titan Brown Leather Wallet",
+      description: "Brown bifold genuine leather wallet with embossed Titan logo on the corner. Contains ID card and college bus pass.",
+      secretFeatures: "Student ID card ending with roll number 17 inside the transparent pocket\nSilver lucky coin in the zipper compartment",
+    },
+    found: {
+      title: "Titan Brown Leather Wallet",
+      description: "Found a brown leather wallet near TK Block 2nd floor staircase. Kept safe.",
+      challenges: [
+        { question: "What is stored inside the transparent ID card pocket?", answer: "Student ID card ending in 17" },
+        { question: "What special coin or item is in the zipper compartment?", answer: "Silver lucky coin" },
+      ],
+      sampleImagePath: "/demo/titan_wallet.jpg",
+      sampleImageName: "titan_wallet_demo",
+    },
+  },
+];
+
+// =========================================================================
 // Component: Form Modal (File Lost Complaint or Report Found Item)
 // =========================================================================
 function ItemFormModal({
@@ -1193,7 +1448,7 @@ function ItemFormModal({
 }: {
   type: "lost" | "found";
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (data: { type: "lost" | "found"; title: string }) => void;
 }) {
   const { data: session } = useSession();
   const [title, setTitle] = useState("");
@@ -1216,6 +1471,74 @@ function ItemFormModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  function createSampleImageFile(name: string, label: string): File {
+    const canvas = document.createElement("canvas");
+    canvas.width = 480;
+    canvas.height = 360;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const grad = ctx.createLinearGradient(0, 0, 480, 360);
+      grad.addColorStop(0, "#1e1b4b");
+      grad.addColorStop(1, "#312e81");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 480, 360);
+
+      ctx.strokeStyle = "#818cf8";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(20, 20, 440, 320);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 24px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(label, 240, 160);
+
+      ctx.fillStyle = "#c7d2fe";
+      ctx.font = "14px sans-serif";
+      ctx.fillText("Campus Verified Item Photo (Demo)", 240, 200);
+
+      ctx.fillStyle = "#a5b4fc";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Stay-Composed Hackathon Verification", 240, 230);
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    const arr = dataUrl.split(",");
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], `${name}.png`, { type: "image/png" });
+  }
+
+  async function handleApplyDemo(index: number) {
+    const tmpl = DEMO_TEMPLATES[index];
+    if (!tmpl) return;
+
+    setTitle(type === "lost" ? tmpl.lost.title : tmpl.found.title);
+    setCategory(tmpl.category);
+    setLocation(tmpl.location);
+    setLocationDetail("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setDescription(type === "lost" ? tmpl.lost.description : tmpl.found.description);
+
+    if (type === "lost") {
+      setSecretFeatures(tmpl.lost.secretFeatures);
+    } else {
+      setChallenges(tmpl.found.challenges);
+      try {
+          const res = await fetch(tmpl.found.sampleImagePath);
+          const blob = await res.blob();
+          const demoFile = new File([blob], tmpl.found.sampleImageName + ".jpg", { type: blob.type });
+          setImageFile(demoFile);
+          setImagePreview(URL.createObjectURL(demoFile));
+        } catch (e) {
+          console.error("Failed to load demo image:", e);
+        }
+    }
+    setErrorMsg("");
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files[0]) {
@@ -1344,7 +1667,7 @@ function ItemFormModal({
         reporterName: session!.user!.name || undefined,
       });
 
-      onSuccess();
+      onSuccess({ type, title });
     } catch (err: any) {
       console.error("Submission error:", err);
       setErrorMsg(err?.response?.data?.detail || err?.message || "An error occurred during submission.");
@@ -1389,8 +1712,39 @@ function ItemFormModal({
           </div>
         )}
 
+        {/* Hackathon Quick-Fill Demo Templates Banner */}
+        <div className="mb-4 bg-purple/5 border border-purple/20 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-purple/10 text-purple flex items-center justify-center shrink-0 font-bold">
+              ⚡
+            </div>
+            <div>
+              <span className="text-xs font-bold text-ink block">Hackathon Quick-Fill Demo Templates</span>
+              <span className="text-[11px] text-ink/65 block">
+                Visible 1-click pre-fill for <strong>24suca17@tcarts.in</strong> &amp; <strong>24suca111@tcarts.in</strong> (either can act as loster or founder).
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => handleApplyDemo(0)}
+              className="flex-1 sm:flex-initial text-center px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-paperDark text-ink hover:border-purple hover:text-purple transition-all shadow-2xs whitespace-nowrap"
+            >
+              💻 Dell Laptop Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyDemo(1)}
+              className="flex-1 sm:flex-initial text-center px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-paperDark text-ink hover:border-purple hover:text-purple transition-all shadow-2xs whitespace-nowrap"
+            >
+              👛 Titan Wallet Demo
+            </button>
+          </div>
+        </div>
+
         {/* Two columns on md+ screens so the form spreads wide instead of stacking tall */}
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+        <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
           <div className="md:col-span-2">
             <label className="text-xs font-semibold text-ink/75 block mb-1">
               Product Name / Title *
@@ -1453,7 +1807,7 @@ function ItemFormModal({
               <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                required={type === "found"}
+                required={Boolean(type === "found" && !imageFile && !imagePreview)}
                 className="w-full border border-paperDark rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lavender bg-white"
               >
                 <option value="">{type === "found" ? "Select where you found it..." : "Not specified"}</option>
@@ -1631,7 +1985,6 @@ function ItemFormModal({
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                required={type === "found"}
                 className="w-full text-xs text-ink/65 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple file:text-white hover:file:bg-blue cursor-pointer"
               />
             </div>

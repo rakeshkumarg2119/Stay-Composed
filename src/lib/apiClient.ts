@@ -5,6 +5,9 @@ export function getApiClient() {
   const baseURL = getBackendUrl();
   return axios.create({
     baseURL,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
   });
 }

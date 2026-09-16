@@ -70,22 +70,22 @@ export default function ProfilePage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[380px_1fr] gap-8 xl:gap-10">
       {/* Profile summary */}
-      <aside className="flex flex-col gap-6">
-        <div className="bg-white border border-paperDark rounded-2xl p-6 shadow-xs flex flex-col items-center text-center gap-3">
+      <aside className="flex flex-col gap-6 order-2 lg:order-1">
+        <div className="bg-white border border-paperDark rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col items-center text-center gap-3">
           {session?.user?.image ? (
             <img
               src={session.user.image}
               alt={session.user.name ?? "Profile"}
-              className="w-20 h-20 rounded-full border border-paperDark shadow-xs object-cover"
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border border-paperDark shadow-xs object-cover"
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-purple text-white flex items-center justify-center text-2xl font-medium shadow-xs">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-purple text-white flex items-center justify-center text-xl sm:text-2xl font-medium shadow-xs">
               {session?.user?.name?.[0] ?? "U"}
             </div>
           )}
           <div>
-            <p className="font-display text-xl">{session?.user?.name}</p>
+            <p className="font-display text-lg sm:text-xl text-ink">{session?.user?.name}</p>
             <p className="text-xs text-ink/50 mt-0.5">{session?.user?.email}</p>
           </div>
           <button
@@ -101,18 +101,18 @@ export default function ProfilePage() {
             Account Status
           </p>
           <p className="text-sm text-ink/75 font-medium">Verified Campus Member</p>
-          <p className="text-xs text-ink/55 mt-1">
+          <p className="text-xs text-ink/55 mt-1 leading-relaxed">
             Authenticated via {session?.user?.email?.endsWith("@tcarts.in") ? "TC Arts College Account" : "Campus OAuth"}.
           </p>
         </div>
       </aside>
 
       {/* Main content — Responsive Grid */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 order-1 lg:order-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="font-display text-3xl">Your Campus Activity</h1>
-            <p className="text-sm text-ink/65 mt-1">
+            <h1 className="font-display text-2xl sm:text-3xl text-ink">Your Campus Activity</h1>
+            <p className="text-xs sm:text-sm text-ink/65 mt-1 leading-relaxed">
               Live records of your active lost-and-found reports and emergency blood broadcasts.
             </p>
           </div>

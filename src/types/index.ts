@@ -41,6 +41,19 @@ export interface ClaimResult {
   cooldownUntil?: string | Date;
 }
 
+export interface CandidateMatch {
+  candidate: TrueOwnerItem;
+  forComplaintId: string;
+  confidence: number;
+}
+
+export interface MineResponse {
+  myComplaints: TrueOwnerItem[];
+  myFoundItems: TrueOwnerItem[];
+  candidateMatches: CandidateMatch[];
+  chatConfidenceThreshold: number;
+}
+
 export interface ChatThread {
   threadId: string;
   complaintId: string;
@@ -50,7 +63,7 @@ export interface ChatThread {
   claimantName?: string;
   founderName?: string;
   confidence: number;
-  status: "chat" | "verifying" | "verified" | "handed_over" | "resolved" | "closed" | "frozen";
+  status: "chat" | "verifying" | "verification_pending" | "verified" | "handed_over" | "resolved" | "closed" | "frozen";
   createdAt: string | Date;
   verificationStartedAt?: string | Date | null;
   handedOverAt?: string | Date | null;
@@ -69,4 +82,22 @@ export interface MaskedUser {
   userId: string;
   displayName: string; // masked, e.g. "Student #4821"
   email: string; // college email, not shown publicly
+}
+
+export interface AppNotification {
+  id: string;
+  type: "match_found" | "chat_message" | "verification" | "handover" | "system";
+  title: string;
+  body: string;
+  timestamp: string;
+  read: boolean;
+  data?: {
+    threadId?: string;
+    complaintId?: string;
+    foundItemId?: string;
+    confidence?: number;
+    senderEmail?: string;
+    senderName?: string;
+    otherItemTitle?: string;
+  };
 }

@@ -17,8 +17,11 @@ export default function SettingsPage() {
     if (!url.trim()) return;
     setStatus("checking");
     try {
-      const res = await fetch(`${url.trim().replace(/\/$/, "")}/health`);
-      if (res.ok) {
+      const res = await fetch(`${url.trim().replace(/\/$/, "")}/health`, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.status === "ok") {
         setBackendUrl(url);
         setStatus("connected");
       } else {
@@ -32,7 +35,7 @@ export default function SettingsPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[380px_1fr] gap-8 xl:gap-10">
       {/* Sidebar */}
-      <aside className="flex flex-col gap-6">
+      <aside className="flex flex-col gap-6 order-2 lg:order-1">
         <div className="bg-white border border-paperDark rounded-2xl p-5 shadow-xs flex flex-col gap-2">
           <p className="text-xs uppercase tracking-wider font-semibold text-purple">Account</p>
           <p className="text-sm text-ink/70 font-medium">
@@ -62,17 +65,17 @@ export default function SettingsPage() {
       </aside>
 
       {/* Main panel — Responsive 2-column layout */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 order-1 lg:order-2">
         <div>
-          <h1 className="font-display text-3xl">Settings &amp; System Connection</h1>
-          <p className="text-sm text-ink/65 mt-1">
+          <h1 className="font-display text-2xl sm:text-3xl text-ink">Settings &amp; System Connection</h1>
+          <p className="text-xs sm:text-sm text-ink/65 mt-1 leading-relaxed">
             Configure backend endpoints, verify live tunnels, and review platform services.
           </p>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* Backend URL Form */}
-          <div className="xl:col-span-6 bg-white border border-paperDark rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col gap-4">
+          <div className="xl:col-span-6 bg-white border border-paperDark rounded-2xl p-4 sm:p-6 md:p-8 shadow-xs flex flex-col gap-4">
             <div>
               <h3 className="font-display text-xl text-ink mb-1">FastAPI Backend Endpoint</h3>
               <p className="text-xs text-ink/60 mb-4">
