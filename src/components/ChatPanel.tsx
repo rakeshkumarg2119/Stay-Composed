@@ -196,7 +196,7 @@ export default function ChatPanel({
 
   function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!draft.trim() || !wsRef.current || locked || preVerification) return;
+    if (!draft.trim() || !wsRef.current || locked) return;
     sendChatMessage(wsRef.current, draft.trim());
     setDraft("");
   }
@@ -396,7 +396,7 @@ export default function ChatPanel({
               {messages.length === 0 ? (
                 <p className="text-xs text-ink/40 text-center mt-6">
                   {preVerification
-                    ? "No messages yet — choose an allowed question below to coordinate safely before verification."
+                    ? "No messages yet — tap a safe template below or type your own message to coordinate before verification."
                     : "No messages yet."}
                 </p>
               ) : (
@@ -460,13 +460,13 @@ export default function ChatPanel({
                         {templateTab === "questions" ? "Ask safely" : "Reply safely"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <div className="flex flex-wrap gap-1.5 py-0.5 max-h-28 overflow-y-auto">
                       {activeTemplates.map((tmpl, i) => (
                         <button
                           key={i}
                           type="button"
                           onClick={() => handleQuickSend(tmpl)}
-                          className="shrink-0 bg-white border border-paperDark hover:border-purple text-ink/80 hover:text-purple text-[11px] px-3 py-1.5 rounded-full transition-all shadow-2xs active:scale-95 text-left font-medium"
+                          className="bg-white border border-paperDark hover:border-purple text-ink/80 hover:text-purple text-[11px] px-3 py-1.5 rounded-full transition-all shadow-2xs active:scale-95 text-left font-medium"
                         >
                           {tmpl}
                         </button>
@@ -474,7 +474,7 @@ export default function ChatPanel({
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  <div className="flex flex-wrap items-center gap-1.5 max-h-20 overflow-y-auto">
                     <span className="text-[10px] uppercase font-bold text-ink/40 tracking-wider shrink-0 mr-1">
                       Quick:
                     </span>
@@ -502,7 +502,7 @@ export default function ChatPanel({
                 type="text"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                disabled={locked || preVerification}
+                disabled={locked}
                 placeholder={
                   isFrozen
                     ? "Conversation frozen — under admin review"
@@ -511,16 +511,14 @@ export default function ChatPanel({
                     : isVerifying
                     ? "Chat locked while verification challenge is pending"
                     : preVerification
-                    ? isFounder
-                      ? "Select a finder question or answer template above to send"
-                      : "Select an owner question or answer template above to send"
+                    ? "Type a message, or tap a safe question/answer template above..."
                     : "Type a message or click a quick template..."
                 }
                 className="flex-1 border border-paperDark rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-lavender disabled:opacity-50 disabled:bg-paper"
               />
               <button
                 type="submit"
-                disabled={locked || preVerification || !draft.trim()}
+                disabled={locked || !draft.trim()}
                 className="w-9 h-9 shrink-0 rounded-full bg-purple text-white flex items-center justify-center disabled:opacity-40 hover:bg-blue transition-colors"
               >
                 <Send className="w-4 h-4" />

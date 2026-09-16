@@ -119,7 +119,7 @@ export default function TrueOwnerPage() {
   async function handleResetDemoData() {
     if (
       !window.confirm(
-        "Clean all demo items, candidate matches, and chat history for presentation test accounts (24suca17@tcarts.in & 24suca111@tcarts.in)?"
+        "Clean all demo items, candidate matches, and chat history for presentation test accounts (24suca17@tcarts.in, 24suca11@tcarts.in & your account)?"
       )
     ) {
       return;
@@ -128,7 +128,19 @@ export default function TrueOwnerPage() {
     setResetStatus(null);
     try {
       const api = getApiClient();
-      const res = await api.delete("/items/demo-reset");
+      const targetEmails = Array.from(
+        new Set([
+          "24suca17@tcarts.in",
+          "24suca11@tcarts.in",
+          "24suca111@tcarts.in",
+          session?.user?.email?.toLowerCase().trim() || "",
+        ])
+      )
+        .filter(Boolean)
+        .join(",");
+      const res = await api.delete("/items/demo-reset", {
+        params: { emails: targetEmails },
+      });
       setResetStatus(
         `Demo data reset: cleaned ${res.data?.deletedItems || 0} items & ${res.data?.deletedThreads || 0} chat threads.`
       );
@@ -183,7 +195,7 @@ export default function TrueOwnerPage() {
                 onClick={handleResetDemoData}
                 disabled={resettingDemo}
                 className="inline-flex items-center justify-center gap-2 bg-paper text-ink/75 border border-paperDark px-4 py-3 rounded-full text-xs sm:text-sm font-semibold hover:border-brick hover:text-brick transition-all shadow-xs disabled:opacity-50"
-                title="Wipe demo items & chats for 24suca17@tcarts.in & 24suca111@tcarts.in between presentations"
+                title="Wipe demo items & chats for 24suca17@tcarts.in & 24suca11@tcarts.in between presentations"
               >
                 <RotateCcw className={`w-3.5 h-3.5 text-purple ${resettingDemo ? "animate-spin" : ""}`} />
                 {resettingDemo ? "Resetting..." : "Reset Demo Data"}
@@ -1721,7 +1733,7 @@ function ItemFormModal({
             <div>
               <span className="text-xs font-bold text-ink block">Hackathon Quick-Fill Demo Templates</span>
               <span className="text-[11px] text-ink/65 block">
-                Visible 1-click pre-fill for <strong>24suca17@tcarts.in</strong> &amp; <strong>24suca111@tcarts.in</strong> (either can act as loster or founder).
+                Visible 1-click pre-fill for <strong>24suca17@tcarts.in</strong> &amp; <strong>24suca11@tcarts.in</strong> (either can act as loster or founder).
               </span>
             </div>
           </div>
