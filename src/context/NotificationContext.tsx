@@ -14,6 +14,15 @@ import { getWsBackendUrl } from "@/lib/apiConfig";
 import { fetchMyThreads } from "@/lib/chatClient";
 import { AppNotification, ChatThread, TrueOwnerItem } from "@/types";
 
+// Shape of the founder-side match entries returned by GET /items/mine
+// (mirrors CandidateMatch, but keyed by the user's found item instead of
+// their lost complaint — see items.py::my_items).
+interface FounderCandidateMatch {
+  candidate: TrueOwnerItem;
+  forFoundItemId: string;
+  confidence: number;
+}
+
 interface NotificationContextType {
   notifications: AppNotification[];
   unreadCount: number;
@@ -101,7 +110,10 @@ export function NotificationProvider({
     itemTitle: string;
   } | null>(null);
 
-  // Keep track of known matches to avoid repeated notifications: Set of `${forComplaintId}:${foundItemId}`
+  // Keep track of known matches to avoid repeated notifications.
+  // Claimant-side matches are keyed "c:{forComplaintId}:{foundItemId}",
+  // founder-side matches "f:{forFoundItemId}:{complaintId}" — distinct
+  // prefixes so the two directions can never collide on the same key.
   const knownMatchesRef = useRef<Set<string>>(new Set());
   // Active background sockets map threadId -> WebSocket
   const socketsRef = useRef<Map<string, WebSocket>>(new Map());
@@ -195,7 +207,8 @@ export function NotificationProvider({
     []
   );
 
-  // Check for candidate matches for user's complaints
+  // Check for candidate matches for user's complaints AND founder-side
+  // matches for user's found items — both directions of GET /items/mine.
   const triggerMatchCheck = useCallback(async () => {
     if (!userEmail) return;
     try {
@@ -208,20 +221,19 @@ export function NotificationProvider({
         forComplaintId: string;
         confidence: number;
       }[] = res.data?.candidateMatches || [];
-      const threshold = res.data?.chatConfidenceThreshold || 50;
+      const founderMatches: FounderCandidateMatch[] = res.data?.founderMatches || [];
+      const threshold = res.data?.chatConfidenceThreshold || 40;
 
       const currentKnown = new Set(knownMatchesRef.current);
-      let newlyFound = 0;
 
+      // Claimant side: "I lost something, here's a found item that matches"
       candidateMatches.forEach((m) => {
         const candidateId = m.candidate._id || m.candidate.id || "";
-        const pairKey = `${m.forComplaintId}:${candidateId}`;
+        const pairKey = `c:${m.forComplaintId}:${candidateId}`;
 
         if (!currentKnown.has(pairKey)) {
           currentKnown.add(pairKey);
-          // Only notify if confidence meets threshold
           if (m.confidence >= threshold) {
-            newlyFound++;
             pushNotification({
               type: "match_found",
               title: "🔎 Match Discovered!",
@@ -229,6 +241,32 @@ export function NotificationProvider({
               data: {
                 complaintId: m.forComplaintId,
                 foundItemId: candidateId,
+                confidence: m.confidence,
+                otherItemTitle: m.candidate.title,
+              },
+            });
+          }
+        }
+      });
+
+      // Founder side: "someone's lost report matches something you found"
+      // — same trigger as above, just the reverse pairing. This is what
+      // was previously missing entirely, which is why founders only ever
+      // saw the one-time email and never an in-app toast.
+      founderMatches.forEach((m) => {
+        const candidateId = m.candidate._id || m.candidate.id || "";
+        const pairKey = `f:${m.forFoundItemId}:${candidateId}`;
+
+        if (!currentKnown.has(pairKey)) {
+          currentKnown.add(pairKey);
+          if (m.confidence >= threshold) {
+            pushNotification({
+              type: "match_found",
+              title: "🔎 Match Discovered!",
+              body: `A lost report matches your found item (${m.confidence}% AI confidence). An alert email has also been sent to your inbox. Tap to view and chat!`,
+              data: {
+                complaintId: candidateId,
+                foundItemId: m.forFoundItemId,
                 confidence: m.confidence,
                 otherItemTitle: m.candidate.title,
               },

@@ -55,7 +55,7 @@ const LOCATIONS = [
 ];
 const OTHERS_LOCATION = "Others";
 // Keep in sync with backend/app/config.py -> chat_min_confidence
-const CHAT_MIN_CONFIDENCE = 50;
+const CHAT_MIN_CONFIDENCE = 40;
 
 export default function TrueOwnerPage() {
   const { data: session } = useSession();
@@ -66,7 +66,7 @@ export default function TrueOwnerPage() {
   const [candidateMatches, setCandidateMatches] = useState<
     { candidate: TrueOwnerItem; forComplaintId: string; confidence: number }[]
   >([]);
-  const [chatConfidenceThreshold, setChatConfidenceThreshold] = useState(50);
+  const [chatConfidenceThreshold, setChatConfidenceThreshold] = useState(CHAT_MIN_CONFIDENCE);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"complaints" | "matches" | "my-found">("complaints");
   const [backendError, setBackendError] = useState(false);
@@ -673,7 +673,7 @@ function ComplaintCard({
   complaint,
   matches,
   claimantEmail,
-  chatConfidenceThreshold = 50,
+  chatConfidenceThreshold = CHAT_MIN_CONFIDENCE,
   onClaimed,
 }: {
   complaint: TrueOwnerItem;
@@ -974,7 +974,7 @@ function CandidateMatchCard({
   confidence,
   forComplaintId,
   claimantEmail,
-  chatConfidenceThreshold = 50,
+  chatConfidenceThreshold = CHAT_MIN_CONFIDENCE,
   onClaimed,
 }: {
   candidate: TrueOwnerItem;
@@ -1258,7 +1258,7 @@ function ClaimModal({
 function FoundItemCard({
   item,
   founderEmail,
-  chatConfidenceThreshold = 50,
+  chatConfidenceThreshold = CHAT_MIN_CONFIDENCE,
 }: {
   item: TrueOwnerItem;
   founderEmail: string;
