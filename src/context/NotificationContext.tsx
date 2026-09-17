@@ -325,6 +325,7 @@ export function NotificationProvider({
                       confidence: t.confidence,
                       senderEmail: data.senderEmail,
                       senderName: senderDisplayName,
+                      isFounder,
                     },
                   });
                 } else if (data.event === "phase_changed") {
@@ -340,6 +341,7 @@ export function NotificationProvider({
                         threadId: t.threadId,
                         complaintId: t.complaintId,
                         foundItemId: t.foundItemId,
+                        isFounder: userEmail === t.founderEmail,
                       },
                     });
                   } else if (data.status === "verified") {
@@ -352,6 +354,7 @@ export function NotificationProvider({
                         threadId: t.threadId,
                         complaintId: t.complaintId,
                         foundItemId: t.foundItemId,
+                        isFounder: userEmail === t.founderEmail,
                       },
                     });
                   } else if (data.status === "handed_over") {
@@ -364,6 +367,7 @@ export function NotificationProvider({
                         threadId: t.threadId,
                         complaintId: t.complaintId,
                         foundItemId: t.foundItemId,
+                        isFounder: userEmail === t.founderEmail,
                       },
                     });
                   }

@@ -58,12 +58,12 @@ export default function NotificationDropdown() {
     setIsOpen(false);
 
     if (notif.type === "chat_message" && notif.data) {
-      const { complaintId, foundItemId, senderName } = notif.data;
+      const { complaintId, foundItemId, senderName, isFounder } = notif.data;
       if (complaintId && foundItemId) {
         openChatModal({
           complaintId,
           foundItemId,
-          isFounder: false,
+          isFounder: !!isFounder, // role of the person opening this, from the thread data
           itemTitle: senderName || "Chat Conversation",
         });
         return;

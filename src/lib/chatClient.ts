@@ -142,6 +142,12 @@ export function connectChatSocket(
         handlers.onPresenceChange?.(data.onlineEmails, data.userEmail, data.status);
       } else if (data.type === "error") {
         handlers.onError?.(data.message, data.allowedMessages);
+      } else if (data.type === "ping") {
+        // Liveness heartbeat from the backend — any received frame counts
+        // as "alive" server-side, so just echo something back immediately.
+        // Without this, an idle-but-open tab gets swept to "offline" after
+        // the server's presence timeout even though the user never left.
+        ws.send(JSON.stringify({ type: "pong" }));
       }
     } catch {
       // ignore malformed frame

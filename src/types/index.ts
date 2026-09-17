@@ -99,5 +99,6 @@ export interface AppNotification {
     senderEmail?: string;
     senderName?: string;
     otherItemTitle?: string;
+    isFounder?: boolean;
   };
 }

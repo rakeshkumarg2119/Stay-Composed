@@ -25,12 +25,12 @@ export default function NotificationToast() {
     markAsRead(activeToast.id);
 
     if (activeToast.type === "chat_message" && activeToast.data) {
-      const { complaintId, foundItemId, senderName } = activeToast.data;
+      const { complaintId, foundItemId, senderName, isFounder } = activeToast.data;
       if (complaintId && foundItemId) {
         openChatModal({
           complaintId,
           foundItemId,
-          isFounder: false, // Default context, ChatPanel verifies permissions via backend
+          isFounder: !!isFounder, // role of the person opening this, from the thread data — not a default
           itemTitle: senderName || "Chat Conversation",
         });
       } else {

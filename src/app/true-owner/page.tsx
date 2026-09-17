@@ -273,7 +273,7 @@ export default function TrueOwnerPage() {
                 <ImageIcon className="w-4 h-4 text-brick shrink-0 mt-0.5" />
                 <div>
                   <strong className="text-ink block">Founder Photo Enforcement</strong>
-                  Found items must have a photo stored on Cloudinary for verified visual match scoring.
+                  Found items must have a photo stored on Cloudnfor verified visual match scoring.
                 </div>
               </div>
             </div>
@@ -1344,7 +1344,7 @@ function FoundItemCard({
       )}
 
       <div className="mt-2 pt-2 border-t border-paperDark text-[11px] text-ink/50">
-        Photo stored on Cloudinary &bull; Protected from public browsing
+        Photo stored on Cloud &bull; Protected from public browsing
       </div>
 
       {chattingThread && (
@@ -1525,32 +1525,47 @@ function ItemFormModal({
   }
 
   async function handleApplyDemo(index: number) {
-    const tmpl = DEMO_TEMPLATES[index];
-    if (!tmpl) return;
+  const tmpl = DEMO_TEMPLATES[index];
+  if (!tmpl) return;
 
-    setTitle(type === "lost" ? tmpl.lost.title : tmpl.found.title);
-    setCategory(tmpl.category);
-    setLocation(tmpl.location);
-    setLocationDetail("");
-    setDate(new Date().toISOString().split("T")[0]);
-    setDescription(type === "lost" ? tmpl.lost.description : tmpl.found.description);
+  setTitle(type === "lost" ? tmpl.lost.title : tmpl.found.title);
+  setCategory(tmpl.category);
+  setLocation(tmpl.location);
+  setLocationDetail("");
+  setDate(new Date().toISOString().split("T")[0]);
+  setDescription(type === "lost" ? tmpl.lost.description : tmpl.found.description);
 
-    if (type === "lost") {
-      setSecretFeatures(tmpl.lost.secretFeatures);
-    } else {
-      setChallenges(tmpl.found.challenges);
-      try {
-          const res = await fetch(tmpl.found.sampleImagePath);
-          const blob = await res.blob();
-          const demoFile = new File([blob], tmpl.found.sampleImageName + ".jpg", { type: blob.type });
-          setImageFile(demoFile);
-          setImagePreview(URL.createObjectURL(demoFile));
-        } catch (e) {
-          console.error("Failed to load demo image:", e);
-        }
+  if (type === "lost") {
+    setSecretFeatures(tmpl.lost.secretFeatures);
+  } else {
+    setChallenges(tmpl.found.challenges);
+    try {
+      // Cache-bust in case a stale/broken response for this path was
+      // cached by the browser from an earlier (possibly broken) load.
+      const url = `${tmpl.found.sampleImagePath}?v=${Date.now()}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`Demo image fetch failed: ${res.status} ${res.statusText}`);
+      }
+      const blob = await res.blob();
+      if (blob.size === 0) {
+        throw new Error("Demo image blob is empty (0 bytes)");
+      }
+      // Force a known-good image MIME type instead of trusting blob.type,
+      // which can come back empty or wrong depending on how the static
+      // file was served/cached.
+      const demoFile = new File([blob], tmpl.found.sampleImageName + ".jpg", {
+        type: "image/jpeg",
+      });
+      setImageFile(demoFile);
+      setImagePreview(URL.createObjectURL(demoFile));
+    } catch (e) {
+      console.error("Failed to load demo image:", e);
+      setErrorMsg("Couldn't load the demo image automatically. Please upload one manually.");
     }
-    setErrorMsg("");
   }
+  setErrorMsg("");
+}
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files[0]) {
@@ -1643,7 +1658,7 @@ function ItemFormModal({
         });
 
         if (!uploadRes.ok) {
-          throw new Error("Failed to upload image to Cloudinary");
+          throw new Error("Failed to upload image to Cloud");
         }
 
         const uploadData = await uploadRes.json();
@@ -2051,11 +2066,11 @@ function ItemFormModal({
             >
               {submitting
                 ? uploadingImage
-                  ? "Uploading to Cloudinary..."
+                  ? "Uploading to Cloud"
                   : "Submitting..."
                 : type === "lost"
                 ? "File Complaint with Secret Features"
-                : "Register Found Item (Cloudinary)"}
+                : "Register Found Item"}
             </button>
           </div>
         </form>

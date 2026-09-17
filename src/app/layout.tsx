@@ -30,11 +30,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="min-h-screen bg-paper text-ink font-body antialiased">
+      <body className="min-h-screen flex flex-col bg-paper text-ink font-body antialiased">
         <Providers>
           <Navbar />
-          <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-6 sm:py-8 lg:py-10">{children}</main>
-          <footer className="border-t border-paperDark bg-paper/80 py-6 mt-12">
+          <main className="flex-1 w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-6 sm:py-8 lg:py-10">{children}</main>
+          <footer className="border-t border-paperDark bg-paper/80 py-6">
             <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink/60">
               <div className="flex items-center gap-2">
                 <img src="/stay_composed.png" alt="Stay Composed" className="w-6 h-6 object-contain rounded-md" />
