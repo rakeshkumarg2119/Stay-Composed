@@ -43,7 +43,7 @@ export default function RootLayout({
               </div>
               <div className="flex items-center gap-4">
                 <a
-                  href="/downloads/stay-composed-app.apk"
+                  href="/downloads/stay_composed_v1.apk"
                   download="StayComposed-v1.0.apk"
                   className="inline-flex items-center gap-1.5 bg-white border border-paperDark px-3 py-1.5 rounded-full text-ink hover:text-purple hover:border-purple transition-all shadow-2xs font-medium"
                 >
