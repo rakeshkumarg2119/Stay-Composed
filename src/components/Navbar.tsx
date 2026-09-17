@@ -61,7 +61,7 @@ export default function Navbar() {
           </Link>
 
           <a
-            href="/downloads/stay-composed-app.apk"
+            href="/downloads/stay_composed_v1.apk"
             download="StayComposed-v1.0.apk"
             className="inline-flex items-center gap-1.5 bg-paperDark text-ink/80 hover:text-purple hover:bg-purple/10 border border-paperDark px-3 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs shrink-0"
             title="Download Stay Composed Android App (APK)"
@@ -192,7 +192,7 @@ export default function Navbar() {
           <div className="pt-3 border-t border-paperDark flex items-center justify-between">
             <span className="text-xs text-ink/60">Download Android App</span>
             <a
-              href="/downloads/stay-composed-app.apk"
+              href="/downloads/stay_composed_v1.apk"
               download="StayComposed-v1.0.apk"
               className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-2xs hover:bg-emerald-700 transition-colors"
             >

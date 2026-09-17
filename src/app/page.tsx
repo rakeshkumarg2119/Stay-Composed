@@ -84,7 +84,7 @@ export default function Home() {
             )}
 
             <a
-              href="/downloads/stay-composed-app.apk"
+              href="/downloads/stay_composed_v1.apk"
               download="StayComposed-v1.0.apk"
               className="inline-flex items-center transition-transform hover:scale-105 active:scale-95 shadow-sm rounded-lg overflow-hidden"
               title="Download Stay Composed Android App (.apk)"
@@ -402,7 +402,7 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <a
-              href="/downloads/stay-composed-app.apk"
+              href="/downloads/stay_composed_v1.apk"
               download="StayComposed-v1.0.apk"
               className="inline-flex items-center transition-transform hover:scale-105 active:scale-95 shadow-md rounded-lg overflow-hidden"
               title="Download Stay Composed Android App (.apk)"
